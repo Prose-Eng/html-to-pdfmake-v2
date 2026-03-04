@@ -308,7 +308,7 @@ function htmlToPdfMake(htmlText, options) {
               var tableHaveWidth = (element.style.width||elementAttrWidth).endsWith("%");
               if ( tableHaveWidth ) {
                 // get only numbers of percentage
-                var tableWidth = (element.style.width||elementAttrWidth).replace( /[^0-9.]/g, "" );
+                var tableWidth = (element.style.width||elementAttrWidth).replace(/[^0-9.]/g, "" );
               }
 
               var tableHaveColgroup = false;
@@ -585,12 +585,13 @@ function htmlToPdfMake(htmlText, options) {
                 ret.columns = ret.stack;
                 delete ret.stack;
               }
-            } else if (options && typeof options.customTag === "function") {
-              // handle custom tags
-              ret = options.customTag.call(this, {element:element, parents:parents, ret:ret});
             }
-
           }
+        }
+
+        if (options && typeof options.customTag === "function") {
+          // handle custom tags
+          ret = options.customTag.call(this, { element: element, parents: parents, ret: ret });
         }
         
         // reduce the number of JSON properties
