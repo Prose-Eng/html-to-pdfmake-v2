@@ -464,12 +464,15 @@ This fork is written in **TypeScript** and tooled with **[Bun](https://bun.sh)**
 
 ```bash
 bun install        # install dependencies
-bun test           # run the test suite (bun test)
+bun test           # run the test suite (with coverage; thresholds enforced)
 bun test --watch   # watch mode
-bun run typecheck  # tsc --noEmit
+bun run typecheck  # tsc --noEmit (strict)
 bun run lint       # biome check
 bun run build      # emit dist/{index.mjs,index.cjs,browser.js,index.d.ts}
 ```
+
+Coverage is collected on every `bun test` run and enforced against the
+thresholds in `bunfig.toml` (currently 97% lines / 95% functions on `src/`).
 
 The library ships three entry points, resolved automatically via the `exports`
 map in `package.json`:
