@@ -1,4 +1,4 @@
-import type { StyleValue } from "./pdf-node";
+import type { StyleValue } from "../types/internal";
 
 /** Styles applied to a single HTML tag. Properties are removable at runtime. */
 export type DefaultStyle = { [property: string]: StyleValue | undefined };

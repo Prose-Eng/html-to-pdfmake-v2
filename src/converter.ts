@@ -1,12 +1,12 @@
 // source: https://github.com/OpenSlides/OpenSlides/blob/f4f8b8422f9b3fbab58e35ac3f8f870d35813b7d/client/src/app/core/ui-services/html-to-pdf.service.ts
 // and https://github.com/bpampuch/pdfmake/issues/205
 
-import { parseColor } from "./color";
-import { borderValueRearrange, topRightBottomLeftToObject } from "./css";
-import { type DefaultStyle, type DefaultStyles, createDefaultStyles } from "./defaults";
-import type { PdfNode, PdfTable, StyleProperty, StyleValue } from "./pdf-node";
-import type { Content, HtmlToPdfmakeOptions, ImagesByReferenceResult } from "./types";
-import { convertToUnit, toCamelCase } from "./units";
+import { parseColor } from "./helpers/color";
+import { borderValueRearrange, topRightBottomLeftToObject } from "./helpers/css";
+import { type DefaultStyle, type DefaultStyles, createDefaultStyles } from "./helpers/defaults";
+import { convertToUnit, toCamelCase } from "./helpers/units";
+import type { PdfNode, PdfTable, StyleProperty, StyleValue } from "./types/internal";
+import type { Content, HtmlToPdfmakeOptions, ImagesByReferenceResult } from "./types/public";
 
 /** Parameters passed to {@link HtmlToPdfMake.applyStyle}. */
 interface ApplyStyleParams {

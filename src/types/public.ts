@@ -1,7 +1,7 @@
 /**
  * Public type definitions for @prose-eng/html-to-pdfmake.
  */
-import type { PdfNode } from "./pdf-node";
+import type { PdfNode } from "./internal";
 
 /** A pdfmake-compatible content value: a node, an array of nodes, or plain text. */
 export type Content = PdfNode | PdfNode[] | string;
@@ -50,4 +50,4 @@ export interface ImagesByReferenceResult {
   images: Record<string, string>;
 }
 
-export type { PdfNode } from "./pdf-node";
+export type { PdfNode } from "./internal";

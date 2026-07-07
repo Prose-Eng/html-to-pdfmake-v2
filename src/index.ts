@@ -3,8 +3,8 @@
   import htmlToPdfmake from '@prose-eng/html-to-pdfmake'
   htmlToPdfmake('<b>my bold text</b>');
 */
-import { HtmlToPdfMake } from "./html-to-pdfmake";
-import type { Content, HtmlToPdfmakeOptions, ImagesByReferenceResult } from "./types";
+import { HtmlToPdfMake } from "./converter";
+import type { Content, HtmlToPdfmakeOptions, ImagesByReferenceResult } from "./types/public";
 
 /**
  * Transform HTML into a pdfmake-compatible content object.
@@ -27,4 +27,4 @@ export type {
   HtmlToPdfmakeOptions,
   ImagesByReferenceResult,
   PdfNode,
-} from "./types";
+} from "./types/public";
