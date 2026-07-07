@@ -136,504 +136,558 @@ export class HtmlToPdfMake {
   }
 
   /**
-   * Converts a single HTML element to pdfmake, calling itself recursively for
-   * child elements.
+   * Convert a single DOM node to pdfmake, dispatching by node type. Calls itself
+   * recursively for child elements.
    */
   private parseElement(element: Node, parents: HTMLElement[]): PdfNode | string | undefined {
     const nodeName = element.nodeName.toUpperCase();
-    const nodeNameLowerCase = nodeName.toLowerCase();
-    let ret: PdfNode = { text: [] };
 
     // ignore some HTML tags
     if (["COLGROUP", "COL"].indexOf(nodeName) > -1) return "";
 
-    switch (element.nodeType) {
-      case 3: {
-        // TEXT_NODE
-        if (element.textContent) {
-          let text = element.textContent;
-          const parent = parents[parents.length - 1];
-          // check if we have 'white-space' in the parent's style, or a <PRE> ancestor
-          const styleParentTextNode = this.parseStyle(parent, true);
-          let hasWhiteSpace = parents.findIndex((p) => p.nodeName === "PRE") > -1;
-          for (let i = 0; i < styleParentTextNode.length; i++) {
-            if (styleParentTextNode[i].key === "preserveLeadingSpaces") {
-              hasWhiteSpace = styleParentTextNode[i].value as boolean;
-              break;
-            }
-          }
-          // if no 'white-space' style, then deal with white spaces
-          if (!hasWhiteSpace) text = text.replace(/\s*\n\s*/g, " ");
-          if (this.replaceText) text = this.replaceText(text, parents);
+    if (element.nodeType === 3) return this.parseTextNode(element, parents);
+    if (element.nodeType === 1) {
+      return this.parseElementNode(
+        element as HTMLElement,
+        nodeName,
+        nodeName.toLowerCase(),
+        parents,
+      );
+    }
+    return undefined;
+  }
 
-          // for table-ish parents: remove all empty space
-          if (
-            ["TABLE", "THEAD", "TBODY", "TFOOT", "TR", "UL", "OL"].indexOf(parent.nodeName) > -1
-          ) {
-            text = text.replace(/^[\s﻿\xA0]+|[\s﻿\xA0]+$/g, "");
-          }
-          if (text) {
-            return this.applyStyle({ ret: { text }, parents });
-          }
-        }
-        return "";
+  /** Convert a TEXT_NODE, honouring the parent's whitespace handling. */
+  private parseTextNode(element: Node, parents: HTMLElement[]): PdfNode | "" {
+    if (!element.textContent) return "";
+    let text = element.textContent;
+    const parent = parents[parents.length - 1];
+    // check if we have 'white-space' in the parent's style, or a <PRE> ancestor
+    const styleParentTextNode = this.parseStyle(parent, true);
+    let hasWhiteSpace = parents.findIndex((p) => p.nodeName === "PRE") > -1;
+    for (let i = 0; i < styleParentTextNode.length; i++) {
+      if (styleParentTextNode[i].key === "preserveLeadingSpaces") {
+        hasWhiteSpace = styleParentTextNode[i].value as boolean;
+        break;
       }
-      case 1: {
-        // ELEMENT_NODE
-        const el = element as HTMLElement;
-        if ((!this.showHidden && el.style.display === "none") || el.style.visibility === "hidden") {
-          return undefined;
+    }
+    // if no 'white-space' style, then deal with white spaces
+    if (!hasWhiteSpace) text = text.replace(/\s*\n\s*/g, " ");
+    if (this.replaceText) text = this.replaceText(text, parents);
+
+    // for table-ish parents: remove all empty space
+    if (["TABLE", "THEAD", "TBODY", "TFOOT", "TR", "UL", "OL"].indexOf(parent.nodeName) > -1) {
+      text = text.replace(/^[\s﻿\xA0]+|[\s﻿\xA0]+$/g, "");
+    }
+    if (text) return this.applyStyle({ ret: { text }, parents });
+    return "";
+  }
+
+  /** Convert an ELEMENT_NODE: gather children, then dispatch on the tag name. */
+  private parseElementNode(
+    el: HTMLElement,
+    nodeName: string,
+    nodeNameLowerCase: string,
+    parents: HTMLElement[],
+  ): PdfNode | undefined {
+    if ((!this.showHidden && el.style.display === "none") || el.style.visibility === "hidden") {
+      return undefined;
+    }
+
+    let ret: PdfNode = { text: [] };
+    ret.nodeName = nodeName;
+    if (el.id) ret.id = el.id;
+    parents.push(el);
+
+    if (el.childNodes && el.childNodes.length > 0) {
+      const collected = ret.text as PdfNode[];
+      el.childNodes.forEach((child) => {
+        const res = this.parseElement(child, parents);
+        if (res) {
+          if (typeof res !== "string" && Array.isArray(res.text) && res.text.length === 0) {
+            res.text = "";
+          }
+          collected.push(res as PdfNode);
         }
+      });
+      // find if we need a 'stack' instead of a 'text'
+      if (this.searchForStack(ret)) {
+        ret.stack = collected.slice(0);
+        delete ret.text;
+      } else {
+        // apply all the inherited classes and styles from the parents
+        ret = this.applyStyle({ ret, parents });
+      }
+    }
+    parents.pop();
 
-        ret.nodeName = nodeName;
-        if (el.id) ret.id = el.id;
-        parents.push(el);
+    switch (nodeName) {
+      case "TABLE":
+        ret = this.buildTable(ret, el, parents);
+        break;
+      case "TH":
+      case "TD":
+        ret = this.buildTableCell(ret, el, parents);
+        break;
+      case "SVG":
+        ret = this.buildSvg(el);
+        break;
+      case "BR":
+        // for BR we return '\n'
+        ret.text = [{ text: "\n" }];
+        break;
+      case "SUB":
+      case "SUP":
+        ret[nodeNameLowerCase] = { offset: "30%", fontSize: 8 };
+        break;
+      case "HR":
+        this.buildHr(ret, el);
+        break;
+      case "OL":
+      case "UL":
+        ret = this.buildList(ret, el, nodeNameLowerCase, parents);
+        break;
+      case "LI":
+        ret = this.buildListItem(ret);
+        break;
+      case "PRE":
+        ret.preserveLeadingSpaces = true;
+        break;
+      case "IMG":
+        ret = this.buildImage(ret, el, parents);
+        break;
+      case "A":
+        ret = this.buildAnchor(ret, el);
+        break;
+      default:
+        this.buildColumns(ret, el, nodeName);
+        break;
+    }
 
-        if (el.childNodes && el.childNodes.length > 0) {
-          const collected = ret.text as PdfNode[];
-          el.childNodes.forEach((child) => {
-            const res = this.parseElement(child, parents);
-            if (res) {
-              if (typeof res !== "string" && Array.isArray(res.text) && res.text.length === 0) {
-                res.text = "";
-              }
-              collected.push(res as PdfNode);
+    return this.finalizeNode(ret, el, nodeName, parents);
+  }
+
+  /** Build a pdfmake table node from the gathered rows/cells. */
+  private buildTable(ret: PdfNode, el: HTMLElement, parents: HTMLElement[]): PdfNode {
+    // the format for the table is table.body[[], [], ...]
+    const table: PdfTable = { body: [] };
+    ret.table = table;
+
+    const tbodies = ret.stack || ret.text;
+    if (Array.isArray(tbodies)) {
+      let rowIndex = 0;
+      let hasRowSpan = false; // TRUE if we have some rowspan
+      // first round is to deal with colspan
+      tbodies.forEach((tbody) => {
+        const rows = tbody.stack || tbody.text;
+        if (Array.isArray(rows)) {
+          rows.forEach((row) => {
+            const cells = row.stack || row.text;
+            if (Array.isArray(cells)) {
+              const bodyRow: PdfNode[] = [];
+              table.body[rowIndex] = bodyRow;
+              cells.forEach((cell) => {
+                bodyRow.push(cell);
+                // do we have a colSpan? if yes, insert empty cells
+                if (typeof cell.colSpan === "number" && cell.colSpan > 1) {
+                  let n = cell.colSpan;
+                  while (--n > 0) bodyRow.push({ text: "" });
+                }
+                // do we have a rowSpan?
+                if (typeof cell.rowSpan === "number" && cell.rowSpan > 1) hasRowSpan = true;
+              });
+              rowIndex++;
             }
           });
-          // find if we need a 'stack' instead of a 'text'
-          if (this.searchForStack(ret)) {
-            ret.stack = collected.slice(0);
-            delete ret.text;
-          } else {
-            // apply all the inherited classes and styles from the parents
-            ret = this.applyStyle({ ret, parents });
-          }
         }
-        parents.pop();
+      });
 
-        switch (nodeName) {
-          case "TABLE": {
-            // the format for the table is table.body[[], [], ...]
-            const table: PdfTable = { body: [] };
-            ret.table = table;
-
-            const tbodies = ret.stack || ret.text;
-            if (Array.isArray(tbodies)) {
-              let rowIndex = 0;
-              let hasRowSpan = false; // TRUE if we have some rowspan
-              // first round is to deal with colspan
-              tbodies.forEach((tbody) => {
-                const rows = tbody.stack || tbody.text;
-                if (Array.isArray(rows)) {
-                  rows.forEach((row) => {
-                    const cells = row.stack || row.text;
-                    if (Array.isArray(cells)) {
-                      const bodyRow: PdfNode[] = [];
-                      table.body[rowIndex] = bodyRow;
-                      cells.forEach((cell) => {
-                        bodyRow.push(cell);
-                        // do we have a colSpan? if yes, insert empty cells
-                        if (typeof cell.colSpan === "number" && cell.colSpan > 1) {
-                          let n = cell.colSpan;
-                          while (--n > 0) bodyRow.push({ text: "" });
-                        }
-                        // do we have a rowSpan?
-                        if (typeof cell.rowSpan === "number" && cell.rowSpan > 1) hasRowSpan = true;
-                      });
-                      rowIndex++;
-                    }
-                  });
-                }
-              });
-
-              if (hasRowSpan) {
-                const header = table.body[0];
-                if (Array.isArray(header)) {
-                  const columnsCount = header.length;
-                  const rowsCount = table.body.length;
-                  for (let columnInd = 0; columnInd < columnsCount; columnInd++) {
-                    for (let rowInd = 0; rowInd < rowsCount; rowInd++) {
-                      const row = table.body[rowInd];
-                      if (Array.isArray(row)) {
-                        const cell = row[columnInd];
-                        // do we have a rowSpan?
-                        if (typeof cell.rowSpan === "number" && cell.rowSpan > 1) {
-                          const len = cell.rowSpan;
-                          const colspan = typeof cell.colSpan === "number" ? cell.colSpan : 1;
-                          for (let j = 1; j <= len - 1; j++) {
-                            let cs = colspan;
-                            if (table.body[rowInd + j]) {
-                              while (cs--)
-                                table.body[rowInd + j].splice(columnInd, 0, { text: "" });
-                            } else {
-                              // if we have an empty <tr></tr>
-                              cell.rowSpan = (cell.rowSpan as number) - 1;
-                            }
-                          }
-                          // increase rowInd to skip processed rows
-                          rowInd += len - 1;
-                        }
-                      }
+      if (hasRowSpan) {
+        const header = table.body[0];
+        if (Array.isArray(header)) {
+          const columnsCount = header.length;
+          const rowsCount = table.body.length;
+          for (let columnInd = 0; columnInd < columnsCount; columnInd++) {
+            for (let rowInd = 0; rowInd < rowsCount; rowInd++) {
+              const row = table.body[rowInd];
+              if (Array.isArray(row)) {
+                const cell = row[columnInd];
+                // do we have a rowSpan?
+                if (typeof cell.rowSpan === "number" && cell.rowSpan > 1) {
+                  const len = cell.rowSpan;
+                  const colspan = typeof cell.colSpan === "number" ? cell.colSpan : 1;
+                  for (let j = 1; j <= len - 1; j++) {
+                    let cs = colspan;
+                    if (table.body[rowInd + j]) {
+                      while (cs--) table.body[rowInd + j].splice(columnInd, 0, { text: "" });
+                    } else {
+                      // if we have an empty <tr></tr>
+                      cell.rowSpan = (cell.rowSpan as number) - 1;
                     }
                   }
+                  // increase rowInd to skip processed rows
+                  rowInd += len - 1;
                 }
               }
             }
-
-            delete ret.stack;
-            delete ret.text;
-            // apply all the inherited classes and styles from the parents
-            ret = this.applyStyle({ ret, parents: parents.concat([el]) });
-
-            // if option tableAutoSize, then try to apply the correct width/height
-            if (this.tableAutoSize) {
-              const cellsWidths: Array<Array<string | number>> = [];
-              const cellsHeights: Array<Array<string | number>> = [];
-              const tableWidths: Array<string | number> = [];
-              const tableHeights: Array<string | number> = [];
-
-              // determine if we have "width:100%" on the TABLE
-              const fullWidth = el.getAttribute("width") === "100%" || el.style.width === "100%";
-
-              const elementAttrWidth = el.getAttribute("width") || "";
-              const tableHaveWidth = (el.style.width || elementAttrWidth).endsWith("%");
-              let tableWidthPct = 0;
-              if (tableHaveWidth) {
-                tableWidthPct = Number(
-                  (el.style.width || elementAttrWidth).replace(/[^0-9.]/g, ""),
-                );
-              }
-
-              let tableHaveColgroup = false;
-              let tableColgroupIndex = -1;
-              for (let x = 0; x < el.children.length; x++) {
-                const child = el.children[x];
-                if (!tableHaveColgroup) tableColgroupIndex++;
-                if (child.nodeName.toUpperCase() === "COLGROUP") tableHaveColgroup = true;
-              }
-
-              table.body.forEach((row, rIndex) => {
-                cellsWidths.push([]);
-                cellsHeights.push([]);
-                row.forEach((cell, cellIndex) => {
-                  // we want to remember the different sizes
-                  let width: string | number =
-                    typeof cell.width !== "undefined" ? cell.width : "auto";
-                  if (width === "*") width = "auto"; // 'width:*' is invalid, use 'auto'
-                  let height: string | number =
-                    typeof cell.height !== "undefined" ? cell.height : "auto";
-                  if (height === "*") height = "auto";
-                  const colSpan = typeof cell.colSpan === "number" ? cell.colSpan : 1;
-                  const rowSpan = typeof cell.rowSpan === "number" ? cell.rowSpan : 1;
-                  // divide by the col/rowspan when width/height is numeric
-                  if (width !== "auto" && colSpan > 1) {
-                    if (!Number.isNaN(Number(width))) width = Number(width) / colSpan;
-                    else width = "auto";
-                  }
-                  if (height !== "auto" && rowSpan > 1) {
-                    if (!Number.isNaN(Number(height))) height = Number(height) / rowSpan;
-                    else height = "auto";
-                  }
-
-                  // if we have colgroups defining cells widths
-                  if (tableHaveColgroup) {
-                    const colGroups = el.children[tableColgroupIndex];
-                    const colElement = colGroups.children[cellIndex] as HTMLElement | undefined;
-                    if (colElement) {
-                      const colAttrWidth = colElement.getAttribute("width") || "";
-                      const colStyleWidth = colElement.style.width;
-                      if ((colAttrWidth || colStyleWidth).endsWith("%")) {
-                        width = colAttrWidth || colStyleWidth;
-                      }
-                    }
-                  }
-
-                  cellsWidths[rIndex].push(width);
-                  cellsHeights[rIndex].push(height);
-                });
-              });
-
-              // determine the max width for each cell
-              cellsWidths.forEach((row) => {
-                row.forEach((cellWidth, cellIndex) => {
-                  const type = typeof tableWidths[cellIndex];
-                  if (
-                    type === "undefined" ||
-                    (cellWidth !== "auto" &&
-                      type === "number" &&
-                      (cellWidth as number) > (tableWidths[cellIndex] as number)) ||
-                    (cellWidth !== "auto" && tableWidths[cellIndex] === "auto")
-                  ) {
-                    let finalWidth: string | number = cellWidth;
-                    if (tableHaveWidth) {
-                      // rule of three to get cell's proportional width
-                      const cellPercentage =
-                        cellWidth === "auto"
-                          ? tableWidthPct / row.length
-                          : (Number(String(cellWidth).replace("%", "")) * tableWidthPct) / 100;
-                      finalWidth = `${cellPercentage}%`;
-                    }
-                    tableWidths[cellIndex] = finalWidth;
-                  }
-                });
-              });
-              // determine the max height for each row
-              cellsHeights.forEach((row, rIndex) => {
-                row.forEach((cellHeight) => {
-                  const type = typeof tableHeights[rIndex];
-                  if (
-                    type === "undefined" ||
-                    (cellHeight !== "auto" &&
-                      type === "number" &&
-                      (cellHeight as number) > (tableHeights[rIndex] as number)) ||
-                    (cellHeight !== "auto" && tableHeights[rIndex] === "auto")
-                  ) {
-                    tableHeights[rIndex] = cellHeight;
-                  }
-                });
-              });
-              if (tableWidths.length > 0) {
-                // if 'width:100%' for the table, replace "auto" width with "*"
-                table.widths = fullWidth
-                  ? tableWidths.map((w) => (w === "auto" ? "*" : w))
-                  : tableWidths;
-              }
-              if (tableHeights.length > 0) table.heights = tableHeights;
-            }
-
-            // check if we have some data-pdfmake to apply
-            if (el.dataset.pdfmake) {
-              // handle simple quotes, e.g. <table data-pdfmake="{'layout':'noBorders'}">
-              const raw = el.dataset.pdfmake.replace(/'/g, '"');
-              try {
-                const parsed = JSON.parse(raw) as Record<string, unknown>;
-                for (const key in parsed) {
-                  if (key === "layout") ret.layout = parsed[key];
-                  else table[key] = parsed[key];
-                }
-              } catch (e) {
-                console.error(e);
-              }
-            }
-            break;
-          }
-          case "TH":
-          case "TD": {
-            const rowspan = el.getAttribute("rowspan");
-            if (rowspan) ret.rowSpan = Number(rowspan);
-            const colspan = el.getAttribute("colspan");
-            if (colspan) ret.colSpan = Number(colspan);
-            ret = this.applyStyle({ ret, parents: parents.concat([el]) });
-            break;
-          }
-          case "SVG": {
-            ret = {
-              svg: el.outerHTML.replace(/\n(\s+)?/g, ""),
-              nodeName: "SVG",
-            };
-            if (!this.removeTagClasses) ret.style = ["html-svg"];
-            break;
-          }
-          case "BR": {
-            // for BR we return '\n'
-            ret.text = [{ text: "\n" }];
-            break;
-          }
-          case "SUB":
-          case "SUP": {
-            ret[nodeNameLowerCase] = { offset: "30%", fontSize: 8 };
-            break;
-          }
-          case "HR": {
-            // default style for the HR
-            const styleHR: {
-              width: number;
-              type: string;
-              margin: number[];
-              thickness: number;
-              color: string;
-              left: number;
-              [key: string]: unknown;
-            } = {
-              width: 514,
-              type: "line",
-              margin: [0, 12, 0, 12],
-              thickness: 0.5,
-              color: "#000000",
-              left: 0,
-            };
-            // we can override the default HR style with "data-pdfmake"
-            if (el.dataset.pdfmake) {
-              const raw = el.dataset.pdfmake.replace(/'/g, '"');
-              try {
-                const parsed = JSON.parse(raw) as Record<string, unknown>;
-                for (const key in parsed) styleHR[key] = parsed[key];
-              } catch (e) {
-                console.error(e);
-              }
-            }
-
-            ret.margin = styleHR.margin;
-            ret.canvas = [
-              {
-                type: styleHR.type,
-                x1: styleHR.left,
-                y1: 0,
-                x2: styleHR.width,
-                y2: 0,
-                lineWidth: styleHR.thickness,
-                lineColor: styleHR.color,
-              },
-            ];
-            delete ret.text;
-            break;
-          }
-          case "OL":
-          case "UL": {
-            ret[nodeNameLowerCase] = ((ret.stack || ret.text) as PdfNode[]).slice(0);
-            delete ret.stack;
-            delete ret.text;
-            // apply all the inherited classes and styles from the parents
-            ret = this.applyStyle({ ret, parents: parents.concat([el]) });
-            // check if we have `start`
-            const start = el.getAttribute("start");
-            if (start) ret.start = Number(start);
-            // check if we have "type"
-            switch (el.getAttribute("type")) {
-              case "A":
-                ret.type = "upper-alpha";
-                break;
-              case "a":
-                ret.type = "lower-alpha";
-                break;
-              case "I":
-                ret.type = "upper-roman";
-                break;
-              case "i":
-                ret.type = "lower-roman";
-                break;
-            }
-            // check if we have `list-style-type` or `list-style`
-            if (ret.listStyle || ret.listStyleType) {
-              ret.type = (ret.listStyle || ret.listStyleType) as string;
-            }
-            break;
-          }
-          case "LI": {
-            // if it's a stack, then check if the last child has a "text"
-            const stack = ret.stack;
-            if (stack && !stack[stack.length - 1].text) {
-              // restructure by moving the non-stack stuff inside a "text"
-              const head = stack.slice(0, -1);
-              // make sure we only have 'text' as a child, otherwise switch to a stack
-              const wrap: PdfNode =
-                head.filter((child) => !child.text).length > 0 ? { stack: head } : { text: head };
-              ret = { stack: [wrap, stack[stack.length - 1]] };
-            }
-            break;
-          }
-          case "PRE": {
-            ret.preserveLeadingSpaces = true;
-            break;
-          }
-          case "IMG": {
-            if (this.imagesByReference) {
-              const src = el.getAttribute("data-src") || el.getAttribute("src") || "";
-              const index = this.imagesRef.indexOf(src);
-              if (index > -1) ret.image = `img_ref_${this.imagesByReferenceSuffix}${index}`;
-              else {
-                ret.image = `img_ref_${this.imagesByReferenceSuffix}${this.imagesRef.length}`;
-                this.imagesRef.push(src);
-              }
-            } else {
-              ret.image = el.getAttribute("src") ?? undefined;
-            }
-            delete ret.stack;
-            delete ret.text;
-            // apply all the inherited classes and styles from the parents
-            ret = this.applyStyle({ ret, parents: parents.concat([el]) });
-            break;
-          }
-          case "A": {
-            // the link must be applied to the deeper `text` or stacked element
-            const setLink = (pointer: PdfNode | undefined, href: string): PdfNode => {
-              const node: PdfNode = pointer || { text: "" }; // for link without any text
-              if (Array.isArray(node.text)) {
-                node.text = node.text.map((t) => setLink(t, href));
-                return node;
-              }
-              if (Array.isArray(node.stack)) {
-                // if we have a more complex layer
-                node.stack = node.stack.map((s) => setLink(s, href));
-                return node;
-              }
-              // if 'href' starts with '#' then it's an internal link
-              if (href.indexOf("#") === 0) node.linkToDestination = href.slice(1);
-              else node.link = href;
-              return node;
-            };
-            const href = el.getAttribute("href");
-            if (href) {
-              ret = setLink(ret, href);
-              // reduce the complexity when only 1 text
-              if (Array.isArray(ret.text) && ret.text.length === 1) ret = ret.text[0];
-              ret.nodeName = "A";
-            }
-            break;
-          }
-          default: {
-            // if it's a <DIV> with data-pdfmake-type="columns", interpret as COLUMNS
-            if (nodeName === "DIV" && el.dataset.pdfmakeType === "columns") {
-              if (ret.stack) {
-                ret.columns = ret.stack;
-                delete ret.stack;
-              }
-            }
           }
         }
-
-        if (this.customTag) {
-          // handle custom tags
-          ret = this.customTag.call(this, { element: el, parents, ret }) as PdfNode;
-        }
-
-        // reduce the number of JSON properties
-        if (
-          Array.isArray(ret.text) &&
-          ret.text.length === 1 &&
-          ret.text[0].text &&
-          !ret.text[0].nodeName
-        ) {
-          ret.text = ret.text[0].text;
-        }
-
-        // if we are inside <LI> and the text is empty, PDFMake ignores it (issue #247)
-        if (
-          ((parents.length > 0 && parents[parents.length - 1].nodeName === "LI") ||
-            nodeName === "LI") &&
-          ((Array.isArray(ret.text) && ret.text.length === 0) ||
-            (typeof ret.text === "string" && ret.text === ""))
-        ) {
-          // so we replace it with a space
-          ret.text = " ";
-        }
-
-        // check if we have some data-pdfmake to apply
-        if (["HR", "TABLE"].indexOf(nodeName) === -1 && el.dataset.pdfmake) {
-          const raw = el.dataset.pdfmake.replace(/'/g, '"');
-          try {
-            const parsed = JSON.parse(raw) as Record<string, unknown>;
-            for (const key in parsed) ret[key] = parsed[key];
-          } catch (e) {
-            console.error(e);
-          }
-        }
-
-        return ret;
       }
     }
 
-    return undefined;
+    delete ret.stack;
+    delete ret.text;
+    // apply all the inherited classes and styles from the parents (mutates ret)
+    this.applyStyle({ ret, parents: parents.concat([el]) });
+
+    // if option tableAutoSize, then try to apply the correct width/height
+    if (this.tableAutoSize) this.applyTableAutoSize(table, el);
+
+    // check if we have some data-pdfmake to apply
+    if (el.dataset.pdfmake) {
+      // handle simple quotes, e.g. <table data-pdfmake="{'layout':'noBorders'}">
+      const raw = el.dataset.pdfmake.replace(/'/g, '"');
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        for (const key in parsed) {
+          if (key === "layout") ret.layout = parsed[key];
+          else table[key] = parsed[key];
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return ret;
+  }
+
+  /** Apply width/height derived from cell styles onto the table (tableAutoSize). */
+  private applyTableAutoSize(table: PdfTable, el: HTMLElement): void {
+    const cellsWidths: Array<Array<string | number>> = [];
+    const cellsHeights: Array<Array<string | number>> = [];
+    const tableWidths: Array<string | number> = [];
+    const tableHeights: Array<string | number> = [];
+
+    // determine if we have "width:100%" on the TABLE
+    const fullWidth = el.getAttribute("width") === "100%" || el.style.width === "100%";
+
+    const elementAttrWidth = el.getAttribute("width") || "";
+    const tableHaveWidth = (el.style.width || elementAttrWidth).endsWith("%");
+    let tableWidthPct = 0;
+    if (tableHaveWidth) {
+      tableWidthPct = Number((el.style.width || elementAttrWidth).replace(/[^0-9.]/g, ""));
+    }
+
+    let tableHaveColgroup = false;
+    let tableColgroupIndex = -1;
+    for (let x = 0; x < el.children.length; x++) {
+      const child = el.children[x];
+      if (!tableHaveColgroup) tableColgroupIndex++;
+      if (child.nodeName.toUpperCase() === "COLGROUP") tableHaveColgroup = true;
+    }
+
+    table.body.forEach((row, rIndex) => {
+      cellsWidths.push([]);
+      cellsHeights.push([]);
+      row.forEach((cell, cellIndex) => {
+        // we want to remember the different sizes
+        let width: string | number = typeof cell.width !== "undefined" ? cell.width : "auto";
+        if (width === "*") width = "auto"; // 'width:*' is invalid, use 'auto'
+        let height: string | number = typeof cell.height !== "undefined" ? cell.height : "auto";
+        if (height === "*") height = "auto";
+        const colSpan = typeof cell.colSpan === "number" ? cell.colSpan : 1;
+        const rowSpan = typeof cell.rowSpan === "number" ? cell.rowSpan : 1;
+        // divide by the col/rowspan when width/height is numeric
+        if (width !== "auto" && colSpan > 1) {
+          if (!Number.isNaN(Number(width))) width = Number(width) / colSpan;
+          else width = "auto";
+        }
+        if (height !== "auto" && rowSpan > 1) {
+          if (!Number.isNaN(Number(height))) height = Number(height) / rowSpan;
+          else height = "auto";
+        }
+
+        // if we have colgroups defining cells widths
+        if (tableHaveColgroup) {
+          const colGroups = el.children[tableColgroupIndex];
+          const colElement = colGroups.children[cellIndex] as HTMLElement | undefined;
+          if (colElement) {
+            const colAttrWidth = colElement.getAttribute("width") || "";
+            const colStyleWidth = colElement.style.width;
+            if ((colAttrWidth || colStyleWidth).endsWith("%")) {
+              width = colAttrWidth || colStyleWidth;
+            }
+          }
+        }
+
+        cellsWidths[rIndex].push(width);
+        cellsHeights[rIndex].push(height);
+      });
+    });
+
+    // determine the max width for each cell
+    cellsWidths.forEach((row) => {
+      row.forEach((cellWidth, cellIndex) => {
+        const type = typeof tableWidths[cellIndex];
+        if (
+          type === "undefined" ||
+          (cellWidth !== "auto" &&
+            type === "number" &&
+            (cellWidth as number) > (tableWidths[cellIndex] as number)) ||
+          (cellWidth !== "auto" && tableWidths[cellIndex] === "auto")
+        ) {
+          let finalWidth: string | number = cellWidth;
+          if (tableHaveWidth) {
+            // rule of three to get cell's proportional width
+            const cellPercentage =
+              cellWidth === "auto"
+                ? tableWidthPct / row.length
+                : (Number(String(cellWidth).replace("%", "")) * tableWidthPct) / 100;
+            finalWidth = `${cellPercentage}%`;
+          }
+          tableWidths[cellIndex] = finalWidth;
+        }
+      });
+    });
+    // determine the max height for each row
+    cellsHeights.forEach((row, rIndex) => {
+      row.forEach((cellHeight) => {
+        const type = typeof tableHeights[rIndex];
+        if (
+          type === "undefined" ||
+          (cellHeight !== "auto" &&
+            type === "number" &&
+            (cellHeight as number) > (tableHeights[rIndex] as number)) ||
+          (cellHeight !== "auto" && tableHeights[rIndex] === "auto")
+        ) {
+          tableHeights[rIndex] = cellHeight;
+        }
+      });
+    });
+    if (tableWidths.length > 0) {
+      // if 'width:100%' for the table, replace "auto" width with "*"
+      table.widths = fullWidth ? tableWidths.map((w) => (w === "auto" ? "*" : w)) : tableWidths;
+    }
+    if (tableHeights.length > 0) table.heights = tableHeights;
+  }
+
+  /** Apply rowspan/colspan and inherited styles to a <th>/<td> node. */
+  private buildTableCell(ret: PdfNode, el: HTMLElement, parents: HTMLElement[]): PdfNode {
+    const rowspan = el.getAttribute("rowspan");
+    if (rowspan) ret.rowSpan = Number(rowspan);
+    const colspan = el.getAttribute("colspan");
+    if (colspan) ret.colSpan = Number(colspan);
+    return this.applyStyle({ ret, parents: parents.concat([el]) });
+  }
+
+  /** Build an inline SVG node. */
+  private buildSvg(el: HTMLElement): PdfNode {
+    const ret: PdfNode = {
+      svg: el.outerHTML.replace(/\n(\s+)?/g, ""),
+      nodeName: "SVG",
+    };
+    if (!this.removeTagClasses) ret.style = ["html-svg"];
+    return ret;
+  }
+
+  /** Render an <hr> as a canvas line, honouring data-pdfmake overrides. */
+  private buildHr(ret: PdfNode, el: HTMLElement): void {
+    // default style for the HR
+    const styleHR: {
+      width: number;
+      type: string;
+      margin: number[];
+      thickness: number;
+      color: string;
+      left: number;
+      [key: string]: unknown;
+    } = {
+      width: 514,
+      type: "line",
+      margin: [0, 12, 0, 12],
+      thickness: 0.5,
+      color: "#000000",
+      left: 0,
+    };
+    // we can override the default HR style with "data-pdfmake"
+    if (el.dataset.pdfmake) {
+      const raw = el.dataset.pdfmake.replace(/'/g, '"');
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        for (const key in parsed) styleHR[key] = parsed[key];
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    ret.margin = styleHR.margin;
+    ret.canvas = [
+      {
+        type: styleHR.type,
+        x1: styleHR.left,
+        y1: 0,
+        x2: styleHR.width,
+        y2: 0,
+        lineWidth: styleHR.thickness,
+        lineColor: styleHR.color,
+      },
+    ];
+    delete ret.text;
+  }
+
+  /** Build an ordered/unordered list node from its items. */
+  private buildList(
+    ret: PdfNode,
+    el: HTMLElement,
+    nodeNameLowerCase: string,
+    parents: HTMLElement[],
+  ): PdfNode {
+    ret[nodeNameLowerCase] = ((ret.stack || ret.text) as PdfNode[]).slice(0);
+    delete ret.stack;
+    delete ret.text;
+    // apply all the inherited classes and styles from the parents (mutates ret)
+    this.applyStyle({ ret, parents: parents.concat([el]) });
+    // check if we have `start`
+    const start = el.getAttribute("start");
+    if (start) ret.start = Number(start);
+    // check if we have "type"
+    switch (el.getAttribute("type")) {
+      case "A":
+        ret.type = "upper-alpha";
+        break;
+      case "a":
+        ret.type = "lower-alpha";
+        break;
+      case "I":
+        ret.type = "upper-roman";
+        break;
+      case "i":
+        ret.type = "lower-roman";
+        break;
+    }
+    // check if we have `list-style-type` or `list-style`
+    if (ret.listStyle || ret.listStyleType) {
+      ret.type = (ret.listStyle || ret.listStyleType) as string;
+    }
+    return ret;
+  }
+
+  /** Normalize a list item so a trailing non-text child becomes a stack. */
+  private buildListItem(ret: PdfNode): PdfNode {
+    // if it's a stack, then check if the last child has a "text"
+    const stack = ret.stack;
+    if (stack && !stack[stack.length - 1].text) {
+      // restructure by moving the non-stack stuff inside a "text"
+      const head = stack.slice(0, -1);
+      // make sure we only have 'text' as a child, otherwise switch to a stack
+      const wrap: PdfNode =
+        head.filter((child) => !child.text).length > 0 ? { stack: head } : { text: head };
+      return { stack: [wrap, stack[stack.length - 1]] };
+    }
+    return ret;
+  }
+
+  /** Build an image node, optionally storing the src by reference. */
+  private buildImage(ret: PdfNode, el: HTMLElement, parents: HTMLElement[]): PdfNode {
+    if (this.imagesByReference) {
+      const src = el.getAttribute("data-src") || el.getAttribute("src") || "";
+      const index = this.imagesRef.indexOf(src);
+      if (index > -1) ret.image = `img_ref_${this.imagesByReferenceSuffix}${index}`;
+      else {
+        ret.image = `img_ref_${this.imagesByReferenceSuffix}${this.imagesRef.length}`;
+        this.imagesRef.push(src);
+      }
+    } else {
+      ret.image = el.getAttribute("src") ?? undefined;
+    }
+    delete ret.stack;
+    delete ret.text;
+    // apply all the inherited classes and styles from the parents
+    return this.applyStyle({ ret, parents: parents.concat([el]) });
+  }
+
+  /** Apply a link (or internal destination) to an <a> node and its descendants. */
+  private buildAnchor(input: PdfNode, el: HTMLElement): PdfNode {
+    // the link must be applied to the deeper `text` or stacked element
+    const setLink = (pointer: PdfNode | undefined, href: string): PdfNode => {
+      const node: PdfNode = pointer || { text: "" }; // for link without any text
+      if (Array.isArray(node.text)) {
+        node.text = node.text.map((t) => setLink(t, href));
+        return node;
+      }
+      if (Array.isArray(node.stack)) {
+        // if we have a more complex layer
+        node.stack = node.stack.map((s) => setLink(s, href));
+        return node;
+      }
+      // if 'href' starts with '#' then it's an internal link
+      if (href.indexOf("#") === 0) node.linkToDestination = href.slice(1);
+      else node.link = href;
+      return node;
+    };
+    const href = el.getAttribute("href");
+    if (!href) return input;
+    let ret = setLink(input, href);
+    // reduce the complexity when only 1 text
+    if (Array.isArray(ret.text) && ret.text.length === 1) ret = ret.text[0];
+    ret.nodeName = "A";
+    return ret;
+  }
+
+  /** Interpret <div data-pdfmake-type="columns"> as pdfmake columns. */
+  private buildColumns(ret: PdfNode, el: HTMLElement, nodeName: string): void {
+    if (nodeName === "DIV" && el.dataset.pdfmakeType === "columns") {
+      if (ret.stack) {
+        ret.columns = ret.stack;
+        delete ret.stack;
+      }
+    }
+  }
+
+  /** Apply custom tags, property reduction, the empty-<li> fix, and data-pdfmake. */
+  private finalizeNode(
+    input: PdfNode,
+    el: HTMLElement,
+    nodeName: string,
+    parents: HTMLElement[],
+  ): PdfNode {
+    let ret = input;
+    if (this.customTag) {
+      // handle custom tags
+      ret = this.customTag.call(this, { element: el, parents, ret }) as PdfNode;
+    }
+
+    // reduce the number of JSON properties
+    if (
+      Array.isArray(ret.text) &&
+      ret.text.length === 1 &&
+      ret.text[0].text &&
+      !ret.text[0].nodeName
+    ) {
+      ret.text = ret.text[0].text;
+    }
+
+    // if we are inside <LI> and the text is empty, PDFMake ignores it (issue #247)
+    if (
+      ((parents.length > 0 && parents[parents.length - 1].nodeName === "LI") ||
+        nodeName === "LI") &&
+      ((Array.isArray(ret.text) && ret.text.length === 0) ||
+        (typeof ret.text === "string" && ret.text === ""))
+    ) {
+      // so we replace it with a space
+      ret.text = " ";
+    }
+
+    // check if we have some data-pdfmake to apply
+    if (["HR", "TABLE"].indexOf(nodeName) === -1 && el.dataset.pdfmake) {
+      const raw = el.dataset.pdfmake.replace(/'/g, '"');
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        for (const key in parsed) ret[key] = parsed[key];
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return ret;
   }
 
   private searchForStack(ret: PdfNode): boolean {
