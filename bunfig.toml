@@ -5,7 +5,5 @@
 coverage = true
 coverageReporter = ["text", "lcov"]
 coverageSkipTestFiles = true
-# Exclude the simple-test-framework shim (test infra) from coverage numbers.
-coveragePathIgnorePatterns = ["**/simple-test-framework.ts"]
 # Enforce coverage on the library source (src/**). Aggregate across files.
 coverageThreshold = { line = 0.97, function = 0.95, statement = 0.97 }
