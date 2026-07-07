@@ -12,11 +12,11 @@
  *     t.finish();
  *   });
  *
- * This shim lets the ~1300-line `unit.test.js` run under `bun test` unchanged,
- * so we keep every existing assertion as a safety net while migrating to
- * TypeScript. A future pass can port these to native `expect()` (see PLAN Phase 4).
+ * This shim lets the ~1300-line `unit.test.ts` run under `bun test` with its
+ * original structure intact, so every existing assertion is preserved. A future
+ * pass can port these to native `expect()`.
  */
-const { describe, test: bunTest, expect } = require("bun:test");
+import { test as bunTest, describe, expect } from "bun:test";
 
 interface Harness {
   test(name: string, fn: (t: Harness) => void): Harness;
@@ -61,4 +61,4 @@ function simpleTest(name: string, fn: (t: Harness) => void): void {
   });
 }
 
-module.exports = simpleTest;
+export default simpleTest;

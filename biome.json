@@ -29,7 +29,7 @@
   },
   "overrides": [
     {
-      "include": ["test/unit.test.js", "example.ts"],
+      "include": ["test/unit.test.ts", "example.ts"],
       "formatter": { "enabled": false },
       "organizeImports": { "enabled": false },
       "linter": { "rules": { "recommended": false } }

@@ -1,9 +1,18 @@
-var htmlToPdfMake = require('../src/index.ts').default;
-var test = require("./simple-test-framework");
-var jsdom = require("jsdom");
-var { JSDOM } = jsdom;
-var { window } = new JSDOM("");
-var debug = false;
+import { JSDOM } from "jsdom";
+import base from "../src/index";
+import test from "./simple-test-framework";
+
+// This legacy suite navigates dynamic pdfmake output and reuses one `ret`
+// variable as both an array and a node, so results are typed loosely at this
+// single boundary. Behaviour is identical to the original JS; every assertion
+// is preserved. (A native, fully-typed `expect()` rewrite is a separate task.)
+const htmlToPdfMake = base as unknown as (
+  html: string,
+  options?: Record<string, unknown>,
+) => any;
+
+const { window } = new JSDOM("");
+const debug = false;
 
 test("unit tests", function(t) {
   t.test("b",function(t) {
@@ -1092,7 +1101,7 @@ test("unit tests", function(t) {
     if (debug) console.log(JSON.stringify(ret));
     t.check(Array.isArray(ret) && ret.length === 1, "return is OK");
     ret = ret[0];
-    t.check(ret.text === "border" && Array.isArray(ret.border) && ret.border.filter(function(b) { return b===true }).length===4 && Array.isArray(ret.borderColor) && ret.borderColor.filter(function(b) { return b==='red' }).length===4, "borderValueRearrange");
+    t.check(ret.text === "border" && Array.isArray(ret.border) && ret.border.filter(function(b: boolean) { return b===true }).length===4 && Array.isArray(ret.borderColor) && ret.borderColor.filter(function(b: string) { return b==='red' }).length===4, "borderValueRearrange");
     t.finish();
   });
 
