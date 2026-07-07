@@ -3,5 +3,4 @@
 // `browserify --standalone htmlToPdfmake` behaviour.
 import htmlToPdfmake from "./index";
 
-// biome-ignore lint/suspicious/noExplicitAny: attaching to the global object
-(globalThis as any).htmlToPdfmake = htmlToPdfmake;
+(globalThis as { htmlToPdfmake?: typeof htmlToPdfmake }).htmlToPdfmake = htmlToPdfmake;

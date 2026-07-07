@@ -17,11 +17,19 @@
   },
   "linter": {
     "enabled": true,
-    "rules": { "recommended": true }
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noForEach": "off"
+      },
+      "performance": {
+        "noDelete": "off"
+      }
+    }
   },
   "overrides": [
     {
-      "include": ["src/index.ts", "test/unit.test.js", "example.ts"],
+      "include": ["test/unit.test.js", "example.ts"],
       "formatter": { "enabled": false },
       "organizeImports": { "enabled": false },
       "linter": { "rules": { "recommended": false } }

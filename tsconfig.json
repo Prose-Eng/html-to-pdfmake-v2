@@ -6,13 +6,7 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["bun"],
 
-    // Gradual typing: the ported monolith (src/index.ts) is not yet fully
-    // strict. The public API in src/types.ts is fully typed. Phase 3 will split
-    // the monolith into modules and turn these back on.
-    "strict": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
-    "noImplicitThis": false,
+    "strict": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,

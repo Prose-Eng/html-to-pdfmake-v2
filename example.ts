@@ -229,7 +229,7 @@ var docDefinition = {
   content: [
     html
   ],
-  pageBreakBefore: function(currentNode) {
+  pageBreakBefore: function(currentNode: { style?: string[] }) {
     // we add a page break before elements with the classname "pdf-pagebreak-before"
     return currentNode.style && currentNode.style.indexOf('pdf-pagebreak-before') > -1;
   },
@@ -268,17 +268,17 @@ var docDefinition = {
 var pdfDocGenerator = pdfMake.createPdf(docDefinition, {
   // see https://pdfmake.github.io/docs/0.1/document-definition-object/tables/
   exampleLayout: {
-    hLineColor: function (rowIndex, node, colIndex) {
+    hLineColor: function (rowIndex: number, node: { table: { body: unknown[][] } }, colIndex: number) {
       if (rowIndex === node.table.body.length) return 'blue';
       return rowIndex <= 1 ? 'red' : '#dddddd';
     },
-    vLineColor: function (colIndex, node, rowIndex) {
+    vLineColor: function (colIndex: number, node: { table: { body: unknown[][] } }, rowIndex: number) {
       if (rowIndex === 0) return 'red';
       return rowIndex > 0 && (colIndex === 0 || colIndex === node.table.body[0].length) ? 'blue' : 'black';
     }
   }
 });
-pdfDocGenerator.getBuffer(function(buffer) {
+pdfDocGenerator.getBuffer(function(buffer: Buffer) {
   fs.writeFileSync('example.pdf', buffer);
   console.log('--> example.pdf')
 });

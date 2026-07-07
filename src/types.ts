@@ -1,14 +1,10 @@
 /**
  * Public type definitions for @prose-eng/html-to-pdfmake.
- *
- * The return value is a pdfmake-compatible content node (or an array of them).
- * pdfmake does not ship a single canonical node type, so `Content` is kept
- * permissive here; Phase 3 will narrow the internals as the monolith is split.
  */
+import type { PdfNode } from "./pdf-node";
 
-/** A pdfmake-compatible content node (object, string, or array of nodes). */
-// biome-ignore lint/suspicious/noExplicitAny: pdfmake content is structurally open-ended
-export type Content = any;
+/** A pdfmake-compatible content value: a node, an array of nodes, or plain text. */
+export type Content = PdfNode | PdfNode[] | string;
 
 /** Argument passed to the `customTag` callback. */
 export interface CustomTagParams {
@@ -53,3 +49,5 @@ export interface ImagesByReferenceResult {
   content: Content;
   images: Record<string, string>;
 }
+
+export type { PdfNode } from "./pdf-node";
