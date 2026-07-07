@@ -1,7 +1,7 @@
 {
-  "name": "html-to-pdfmake",
+  "name": "html-to-pdfmake-v2",
   "version": "2.5.33",
-  "description": "Convert HTML code to PDFMake",
+  "description": "Convert HTML code to PDFMake (fork of html-to-pdfmake, maintained by Prose-Eng)",
   "main": "index.js",
   "scripts": {
     "pretest": "eslint index.js",
@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Aymkdn/html-to-pdfmake.git"
+    "url": "git+https://github.com/Prose-Eng/html-to-pdfmake-v2.git"
   },
-  "author": "Aymkdn",
+  "author": "Prose-Eng",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Aymkdn/html-to-pdfmake/issues"
+    "url": "https://github.com/Prose-Eng/html-to-pdfmake-v2/issues"
   },
-  "homepage": "https://github.com/Aymkdn/html-to-pdfmake#readme",
+  "homepage": "https://github.com/Prose-Eng/html-to-pdfmake-v2#readme",
   "devDependencies": {
     "eslint": "^5.16.0",
     "jsdom": "^16.6.0",

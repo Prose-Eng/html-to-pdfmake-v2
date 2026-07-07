@@ -1,4 +1,6 @@
-# html-to-pdfmake
+# html-to-pdfmake-v2
+
+> A fork of [Aymkdn/html-to-pdfmake](https://github.com/Aymkdn/html-to-pdfmake) (MIT), maintained by [Prose-Eng](https://github.com/Prose-Eng). Original work © 2019 Aymeric.
 
 Convert HTML to PDFMake format with ease. This library bridges the gap between HTML content and [PDFMake](https://pdfmake.github.io/docs/) document definitions, allowing you to generate PDFs from basic HTML while maintaining based styling and structure.
 
