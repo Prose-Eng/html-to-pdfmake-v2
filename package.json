@@ -1,8 +1,11 @@
 {
-  "name": "html-to-pdfmake-v2",
+  "name": "@prose-eng/html-to-pdfmake",
   "version": "2.5.33",
   "description": "Convert HTML code to PDFMake (fork of html-to-pdfmake, maintained by Prose-Eng)",
   "main": "index.js",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "pretest": "eslint index.js",
     "test": "node test/unit.js",

@@ -34,7 +34,7 @@ Try it live with the [online demo](https://aymkdn.github.io/html-to-pdfmake/inde
   <!-- Include required libraries -->
   <script src="https://cdn.jsdelivr.net/npm/pdfmake@latest/build/pdfmake.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfmake@latest/build/vfs_fonts.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html-to-pdfmake/browser.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@prose-eng/html-to-pdfmake/browser.js"></script>
 </head>
 <body>
   <script>
@@ -59,13 +59,13 @@ Try it live with the [online demo](https://aymkdn.github.io/html-to-pdfmake/inde
 ### Node based Project Usage
 
 ```bash
-npm install html-to-pdfmake jsdom
+npm install @prose-eng/html-to-pdfmake jsdom
 ```
 
 ```javascript
 const pdfMake = require('pdfmake/build/pdfmake');
 const pdfFonts = require('pdfmake/build/vfs_fonts');
-const htmlToPdfmake = require('html-to-pdfmake');
+const htmlToPdfmake = require('@prose-eng/html-to-pdfmake');
 // if you need to run it in a terminal console using "node", then you need the below two lines:
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
