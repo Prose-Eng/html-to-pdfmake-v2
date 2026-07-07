@@ -1,7 +1,10 @@
 .DS_Store
 node_modules
 /dist
+/coverage
+*.tsbuildinfo
 package-lock.json
+yarn.lock
 
 # local env files
 .env.local

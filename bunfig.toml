@@ -1,0 +1,6 @@
+# Bun configuration. Test discovery is automatic (any *.test.* file).
+[test]
+# Coverage is opt-in via `bun test --coverage` (see the `coverage` npm script).
+# Phase 4 will turn on thresholds here once gaps are filled.
+coverageReporter = ["text", "lcov"]
+coverageSkipTestFiles = true

@@ -1,10 +1,17 @@
+// @ts-nocheck -- TODO(phase-3): remove once the monolith is split into typed
+// modules. This ported ES5 core uses a dynamic accumulator pattern that does not
+// type-check cleanly yet. The public API in ./types.ts is fully typed and checked,
+// and the exported htmlToPdfmake() signature below is annotated, so the generated
+// .d.ts stays correct for consumers.
 // source: https://github.com/OpenSlides/OpenSlides/blob/f4f8b8422f9b3fbab58e35ac3f8f870d35813b7d/client/src/app/core/ui-services/html-to-pdf.service.ts
 // and https://github.com/bpampuch/pdfmake/issues/205
 
+import type { Content, HtmlToPdfmakeOptions } from "./types";
+
 /**
   To use it:
-  import htmlToPdfMake from 'html-to-pdfmake.js'
-  htmlToPdfMake('<b>my bold text</b>');
+  import htmlToPdfmake from '@prose-eng/html-to-pdfmake'
+  htmlToPdfmake('<b>my bold text</b>');
 */
 
 /**
@@ -1174,6 +1181,23 @@ function htmlToPdfMake(htmlText, options) {
   return result;
 }
 
-module.exports = function(htmlText, options) {
-  return new htmlToPdfMake(htmlText, options);
+/**
+ * Transform HTML into a pdfmake-compatible content object.
+ * @param htmlText The HTML to convert.
+ * @param options  Optional configuration (see {@link HtmlToPdfmakeOptions}).
+ * @returns A pdfmake content node, or `{ content, images }` when `imagesByReference` is set.
+ */
+function htmlToPdfmake(htmlText: string, options?: HtmlToPdfmakeOptions): Content {
+  // The core is an ES5 constructor that holds per-call state on `this`;
+  // `new` is required. Phase 3 will convert this to a typed class.
+  return new (htmlToPdfMake as any)(htmlText, options);
 }
+
+export default htmlToPdfmake;
+export { htmlToPdfmake };
+export type {
+  Content,
+  CustomTagParams,
+  HtmlToPdfmakeOptions,
+  ImagesByReferenceResult,
+} from "./types";

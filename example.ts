@@ -5,7 +5,7 @@ var fs = require("fs");
 var jsdom = require("jsdom");
 var { JSDOM } = jsdom;
 var { window } = new JSDOM("");
-var htmlToPdfMake = require("./index.js");
+var htmlToPdfMake = require("./src/index.ts").default;
 //var util = require("util");
 
 var html = htmlToPdfMake(`
@@ -282,3 +282,7 @@ pdfDocGenerator.getBuffer(function(buffer) {
   fs.writeFileSync('example.pdf', buffer);
   console.log('--> example.pdf')
 });
+
+// Mark this file as a module so the local `window` binding does not clash with
+// the DOM lib's global `window` during typecheck.
+export {};

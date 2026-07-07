@@ -34,7 +34,7 @@ Try it live with the [online demo](https://aymkdn.github.io/html-to-pdfmake/inde
   <!-- Include required libraries -->
   <script src="https://cdn.jsdelivr.net/npm/pdfmake@latest/build/pdfmake.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfmake@latest/build/vfs_fonts.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@prose-eng/html-to-pdfmake/browser.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@prose-eng/html-to-pdfmake/dist/browser.js"></script>
 </head>
 <body>
   <script>
@@ -451,12 +451,36 @@ Example to center a table in the page:
 
 ## Examples
 
-You can find more examples in [example.js](example.js) which will create [example.pdf](example.pdf):
+You can find more examples in [example.ts](example.ts) which will create [example.pdf](example.pdf):
 
 ```bash
-npm install
-node example.js
+bun install
+bun run example
 ```
+
+## Development
+
+This fork is written in **TypeScript** and tooled with **[Bun](https://bun.sh)**.
+
+```bash
+bun install        # install dependencies
+bun test           # run the test suite (bun test)
+bun test --watch   # watch mode
+bun run typecheck  # tsc --noEmit
+bun run lint       # biome check
+bun run build      # emit dist/{index.mjs,index.cjs,browser.js,index.d.ts}
+```
+
+The library ships three entry points, resolved automatically via the `exports`
+map in `package.json`:
+
+| Consumer | Entry |
+| --- | --- |
+| ESM `import` | `dist/index.mjs` |
+| CommonJS `require` | `dist/index.cjs` (returns the function directly) |
+| Browser `<script>` | `dist/browser.js` (global `htmlToPdfmake`) |
+
+Type declarations are generated at `dist/index.d.ts`.
 
 ## Donate
 

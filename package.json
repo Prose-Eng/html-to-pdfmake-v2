@@ -2,15 +2,38 @@
   "name": "@prose-eng/html-to-pdfmake",
   "version": "2.5.33",
   "description": "Convert HTML code to PDFMake (fork of html-to-pdfmake, maintained by Prose-Eng)",
-  "main": "index.js",
+  "type": "commonjs",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "browser": "dist/browser.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./browser": "./dist/browser.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md", "LICENSE"],
+  "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "pretest": "eslint index.js",
-    "test": "node test/unit.js",
-    "browser": "browserify index.js --standalone htmlToPdfmake | uglifyjs > browser.js",
-    "build": "npm run test && node example.js && npm run browser && node update-doc.js"
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "coverage": "bun test --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "build": "bun run build.ts",
+    "build:docs": "bun run update-doc.ts",
+    "example": "bun run example.ts",
+    "prepublishOnly": "bun run build"
   },
   "repository": {
     "type": "git",
@@ -23,10 +46,13 @@
   },
   "homepage": "https://github.com/Prose-Eng/html-to-pdfmake-v2#readme",
   "devDependencies": {
-    "eslint": "^5.16.0",
-    "jsdom": "^16.6.0",
+    "@biomejs/biome": "^1.9.4",
+    "@types/bun": "^1.1.14",
+    "@types/jsdom": "^21.1.7",
+    "jsdom": "^25.0.1",
     "pdfmake": "^0.2.20",
-    "simple-test-framework": "^0.2.1",
-    "svg-to-pdfkit": "^0.1.8"
-  }
+    "svg-to-pdfkit": "^0.1.8",
+    "typescript": "^5.7.2"
+  },
+  "trustedDependencies": ["@biomejs/biome"]
 }

@@ -1,5 +1,5 @@
-var htmlToPdfMake = require('../index.js');
-var test = require("simple-test-framework");
+var htmlToPdfMake = require('../src/index.ts').default;
+var test = require("./simple-test-framework");
 var jsdom = require("jsdom");
 var { JSDOM } = jsdom;
 var { window } = new JSDOM("");
@@ -243,13 +243,6 @@ test("unit tests", function(t) {
 
     t.finish();
   })
-  [
-    {"text":[
-      {"text":"link ","color":"blue","decoration":["underline"],"style":["html-a"],"link":"https://www.somewhere.com"},
-      {"text":"something","nodeName":"STRONG","color":"blue","decoration":["underline"],"bold":true,"style":["html-strong","html-a"],"link":"https://www.somewhere.com"}
-    ],
-    "nodeName":"A","color":"blue","decoration":["underline"],"style":["html-a"]}
-  ]
 
   t.test("strike",function(t) {
     var ret = htmlToPdfMake("<strike>strike</strike>", {window:window});

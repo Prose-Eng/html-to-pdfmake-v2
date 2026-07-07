@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+
+    // Gradual typing: the ported monolith (src/index.ts) is not yet fully
+    // strict. The public API in src/types.ts is fully typed. Phase 3 will split
+    // the monolith into modules and turn these back on.
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "noImplicitThis": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "esModuleInterop": true,
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": true,
+    "declaration": true,
+    "noEmit": true
+  },
+  "include": ["src", "example.ts", "build.ts", "update-doc.ts", "test/simple-test-framework.ts"]
+}
