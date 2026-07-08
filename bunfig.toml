@@ -1,0 +1,9 @@
+# Bun configuration. Test discovery is automatic (any *.test.* file).
+[test]
+# Coverage is always collected so the thresholds below are enforced (Bun only
+# applies coverageThreshold when coverage is enabled via config, not the flag).
+coverage = true
+coverageReporter = ["text", "lcov"]
+coverageSkipTestFiles = true
+# Enforce coverage on the library source (src/**). Aggregate across files.
+coverageThreshold = { line = 0.97, function = 0.95, statement = 0.97 }
