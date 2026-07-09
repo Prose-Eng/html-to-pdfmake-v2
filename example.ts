@@ -1,12 +1,27 @@
-var pdfMake = require("pdfmake/build/pdfmake");
-var pdfFonts = require("pdfmake/build/vfs_fonts");
-pdfMake.vfs = pdfFonts;
+var pdfMake = require("pdfmake");
 var fs = require("fs");
 var jsdom = require("jsdom");
 var { JSDOM } = jsdom;
 var { window } = new JSDOM("");
 var htmlToPdfMake = require("./src/index.ts").default;
 //var util = require("util");
+
+// pdfmake 0.3 ships no default fonts server-side, so register Roboto explicitly.
+var fontsDir = "node_modules/pdfmake/fonts/Roboto";
+pdfMake.setFonts({
+  Roboto: {
+    normal: `${fontsDir}/Roboto-Regular.ttf`,
+    bold: `${fontsDir}/Roboto-Medium.ttf`,
+    italics: `${fontsDir}/Roboto-Italic.ttf`,
+    bolditalics: `${fontsDir}/Roboto-MediumItalic.ttf`,
+  },
+});
+pdfMake.setLocalAccessPolicy(function (path: string) {
+  return path.startsWith(fontsDir);
+});
+pdfMake.setUrlAccessPolicy(function () {
+  return false;
+});
 
 var html = htmlToPdfMake(`
   Simple text
@@ -265,8 +280,9 @@ var docDefinition = {
   }
 };
 
-var pdfDocGenerator = pdfMake.createPdf(docDefinition, {
-  // see https://pdfmake.github.io/docs/0.1/document-definition-object/tables/
+// see https://pdfmake.github.io/docs/0.3/document-definition-object/tables/
+// in pdfmake 0.3 table layouts are registered on the instance, not passed to createPdf
+pdfMake.addTableLayouts({
   exampleLayout: {
     hLineColor: function (rowIndex: number, node: { table: { body: unknown[][] } }, colIndex: number) {
       if (rowIndex === node.table.body.length) return 'blue';
@@ -278,7 +294,9 @@ var pdfDocGenerator = pdfMake.createPdf(docDefinition, {
     }
   }
 });
-pdfDocGenerator.getBuffer(function(buffer: Buffer) {
+
+var pdfDocGenerator = pdfMake.createPdf(docDefinition);
+pdfDocGenerator.getBuffer().then(function(buffer: Buffer) {
   fs.writeFileSync('example.pdf', buffer);
   console.log('--> example.pdf')
 });

@@ -226,9 +226,12 @@ export class HtmlToPdfMake {
       case "TD":
         ret = this.buildTableCell(ret, el, parents);
         break;
-      case "SVG":
-        ret = this.buildSvg(el);
+      case "SVG": {
+        const svg = this.buildSvg(el);
+        if (!svg) return undefined;
+        ret = svg;
         break;
+      }
       case "BR":
         // for BR we return '\n'
         ret.text = [{ text: "\n" }];
@@ -476,8 +479,17 @@ export class HtmlToPdfMake {
     return this.applyStyle({ ret, parents: parents.concat([el]) });
   }
 
-  /** Build an inline SVG node. */
-  private buildSvg(el: HTMLElement): PdfNode {
+  /**
+   * Build an inline SVG node, or `null` when the SVG carries no dimensions.
+   * pdfmake sizes an SVG from its `width`/`height` attributes, falling back to
+   * `viewBox`; with neither it throws, so such an SVG is skipped instead.
+   */
+  private buildSvg(el: HTMLElement): PdfNode | null {
+    const hasSize = !!el.getAttribute("width") && !!el.getAttribute("height");
+    if (!hasSize && !el.getAttribute("viewBox")) {
+      console.warn("html-to-pdfmake: skipping <svg> without width/height or viewBox");
+      return null;
+    }
     const ret: PdfNode = {
       svg: el.outerHTML.replace(/\n(\s+)?/g, ""),
       nodeName: "SVG",

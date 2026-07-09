@@ -45,14 +45,24 @@
     "url": "https://github.com/Prose-Eng/html-to-pdfmake-v2/issues"
   },
   "homepage": "https://github.com/Prose-Eng/html-to-pdfmake-v2#readme",
+  "peerDependencies": {
+    "pdfmake": "^0.2.20 || ^0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "pdfmake": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/bun": "^1.1.14",
     "@types/jsdom": "^21.1.7",
     "jsdom": "^25.0.1",
-    "pdfmake": "^0.2.20",
-    "svg-to-pdfkit": "^0.1.8",
+    "pdfmake": "^0.3.11",
     "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "trustedDependencies": ["@biomejs/biome"]
 }

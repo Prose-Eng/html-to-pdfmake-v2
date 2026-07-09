@@ -29,3 +29,12 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      # Renders through the real pdfmake. Guards against pdfmake API drift,
+      # which fails silently rather than throwing.
+      - name: Render example PDF
+        run: |
+          rm -f example.pdf
+          bun run example
+          test -s example.pdf
+          head -c 5 example.pdf | grep -q '%PDF-'
