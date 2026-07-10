@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Mints the OIDC token that npm trusted publishing exchanges for a
+      # short-lived credential. Publishing fails without it.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify package.json version matches the release tag
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          TAG=${GITHUB_REF_NAME#v}
+          if [ "$PKG" != "$TAG" ]; then
+            echo "package.json is $PKG but the tag is $TAG"
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun test
+
+      - name: Build
+        run: bun run build
+
+      - name: Render example PDF
+        run: |
+          rm -f example.pdf
+          bun run example
+          test -s example.pdf
+          head -c 5 example.pdf | grep -q '%PDF-'
+
+      # Bun cannot publish with OIDC or provenance, so the publish step runs on
+      # Node. Trusted publishing needs npm >= 11.5.1, which is newer than the npm
+      # bundled with any current Node release.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Publish
+        run: npm publish --provenance --access public
