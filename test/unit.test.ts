@@ -480,6 +480,43 @@ describe("unit tests", () => {
     expect(node.style?.[0]).toBe("html-svg");
   });
 
+  test("svg_viewbox_only", () => {
+    const [node] = convert(
+      `<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>`,
+    );
+    expect("svg" in node).toBe(true);
+  });
+
+  test("svg_without_dimensions_is_skipped", () => {
+    const warn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (msg: string) => {
+      warnings.push(msg);
+    };
+    try {
+      // pdfmake cannot size such an SVG and throws, so it is dropped instead
+      const result = convert(
+        `<p>before</p><svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg><p>after</p>`,
+      );
+      expect(result.some((n) => "svg" in n)).toBe(false);
+      expect(result.length).toBe(2);
+      expect(warnings.length).toBe(1);
+    } finally {
+      console.warn = warn;
+    }
+  });
+
+  test("svg_missing_only_height_is_skipped", () => {
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      const result = convert(`<svg width="300" xmlns="http://www.w3.org/2000/svg"><rect/></svg>`);
+      expect(result.some((n) => "svg" in n)).toBe(false);
+    } finally {
+      console.warn = warn;
+    }
+  });
+
   test("cascade_tags", () => {
     const [root] = convert(
       '<p style="text-align: center;"><span style="font-size: 14px;"><em><strong>test</strong></em></span></p>',

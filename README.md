@@ -25,9 +25,9 @@ This library will have the same limitation as PDFMake. If you need to verify if 
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- Include required libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/pdfmake@latest/build/pdfmake.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfmake@latest/build/vfs_fonts.min.js"></script>
+  <!-- Include required libraries. vfs_fonts.js must load after pdfmake.js -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.3/build/pdfmake.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.3/build/vfs_fonts.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@prose-eng/html-to-pdfmake/dist/browser.js"></script>
 </head>
 <body>
@@ -53,20 +53,31 @@ This library will have the same limitation as PDFMake. If you need to verify if 
 ### Node based Project Usage
 
 ```bash
-npm install @prose-eng/html-to-pdfmake jsdom
+npm install @prose-eng/html-to-pdfmake pdfmake jsdom
 ```
 
+The example below targets **pdfmake 0.3**. See [pdfmake 0.2 compatibility](#pdfmake-02-compatibility) if you are still on 0.2.
+
 ```javascript
-const pdfMake = require('pdfmake/build/pdfmake');
-const pdfFonts = require('pdfmake/build/vfs_fonts');
+const pdfMake = require('pdfmake');
 const htmlToPdfmake = require('@prose-eng/html-to-pdfmake');
 // if you need to run it in a terminal console using "node", then you need the below two lines:
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 
-// the below line may vary depending on your version of PDFMake
-// please, check https://github.com/bpampuch/pdfmake to know how to initialize this library
-pdfMake.vfs = pdfFonts;
+// pdfmake 0.3 ships no default fonts server-side, so register them explicitly
+const fontsDir = 'node_modules/pdfmake/fonts/Roboto';
+pdfMake.setFonts({
+  Roboto: {
+    normal: `${fontsDir}/Roboto-Regular.ttf`,
+    bold: `${fontsDir}/Roboto-Medium.ttf`,
+    italics: `${fontsDir}/Roboto-Italic.ttf`,
+    bolditalics: `${fontsDir}/Roboto-MediumItalic.ttf`,
+  },
+});
+// pdfmake 0.3 warns unless you declare what it may read from disk and the network
+pdfMake.setLocalAccessPolicy((path) => path.startsWith(fontsDir));
+pdfMake.setUrlAccessPolicy(() => false);
 
 // if you need to run it in a terminal console using "node", then you need to initiate the "window" object with the below line:
 const { window } = new JSDOM('');
@@ -82,12 +93,36 @@ const html = `
 const converted = htmlToPdfmake(html, { window });
 const docDefinition = { content: converted };
 
-// Generate PDF
-pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+// Generate PDF. In pdfmake 0.3 getBuffer() returns a promise
+pdfMake.createPdf(docDefinition).getBuffer().then((buffer) => {
   // when running the command in a terminal console using "node", then we can save the file using the 'fs' native package
   require('fs').writeFileSync('output.pdf', buffer);
 });
 ```
+
+## pdfmake 0.2 compatibility
+
+This library emits a plain pdfmake document definition and never imports pdfmake itself, so it works with **both pdfmake 0.2 and 0.3**. The peer dependency is `^0.2.20 || ^0.3.0` and it is optional.
+
+Only the code that *drives* pdfmake differs between the two. If you stay on 0.2, keep using the 0.2 form:
+
+```javascript
+const pdfMake = require('pdfmake/build/pdfmake');
+const pdfFonts = require('pdfmake/build/vfs_fonts');
+pdfMake.vfs = pdfFonts;
+
+pdfMake.createPdf(docDefinition).getBuffer((buffer) => { /* ... */ });
+```
+
+Beware that these 0.2 calls **fail silently** on 0.3 rather than throwing:
+
+| 0.2 form | On 0.3 |
+| --- | --- |
+| `pdfMake.vfs = pdfFonts` | assignment succeeds, fonts never register |
+| `getBuffer(callback)` | returns a promise, the callback never fires |
+| `createPdf(dd, tableLayouts)` | 2nd argument is now `options`; use `pdfMake.addTableLayouts(...)` |
+
+One conversion behavior differs by pdfmake version: an `<svg>` with **no** `width`/`height` **and no** `viewBox` cannot be sized, so it is skipped with a `console.warn`. pdfmake 0.2 rendered it as a zero-size no-op; pdfmake 0.3 throws on it.
 
 ## Supported HTML Elements
 
@@ -430,7 +465,7 @@ For Base64 encoded image, please refer to the [PDFMake documentation](https://pd
 
 ### Columns
 
-PDFMake has a concept of [`columns`](https://pdfmake.github.io/docs/0.1/document-definition-object/columns/). We use `<div data-pdfmake-type="columns"></div>` to identify it.
+PDFMake has a concept of [`columns`](https://pdfmake.github.io/docs/0.3/document-definition-object/columns/). We use `<div data-pdfmake-type="columns"></div>` to identify it.
   
 Example to center a table in the page:
 ```html
