@@ -100,6 +100,57 @@ pdfMake.createPdf(docDefinition).getBuffer().then((buffer) => {
 });
 ```
 
+## Stylesheet-aware document conversion
+
+The original `htmlToPdfmake` function remains synchronous and converts inline
+`style` attributes. Use the asynchronous `convertDocument` API when the HTML
+also depends on embedded, linked, or separately supplied CSS:
+
+```javascript
+const { convertDocument } = require('@prose-eng/html-to-pdfmake');
+
+const result = await convertDocument(html, {
+  window,
+  media: 'print',
+  // Numeric values are CSS pixels. 664px corresponds to about 498 PDF points.
+  contentWidth: 664,
+  baseUrl: 'https://reports.example.test/',
+  cssText: '.report { font-family: "Open Sans", sans-serif; }',
+  // The library never fetches stylesheet URLs implicitly.
+  resolveStylesheet: async (resolvedHref) => {
+    return loadTrustedStylesheet(resolvedHref);
+  },
+});
+
+const docDefinition = {
+  content: result.content,
+  styles: result.styles,
+  images: result.images,
+};
+```
+
+`convertDocument` resolves the author cascade in an isolated CSSOM document.
+It supports inline attributes, `<style>` elements, selector specificity and
+source order, `!important`, inherited styles, CSS custom properties, common
+`calc()` expressions, print media, and linked stylesheets supplied through the
+resolver. The main options are:
+
+| Option | Purpose |
+| --- | --- |
+| `cssText` | Extra CSS text, or an array of CSS strings, applied last |
+| `resolveStylesheet` | Explicit sync/async resolver for linked CSS |
+| `baseUrl` | Resolves relative stylesheet hrefs before calling the resolver |
+| `media` | Selects the `screen` (default) or `print` cascade |
+| `contentWidth` | Width of the isolated CSS viewport; numbers mean CSS pixels |
+
+The result includes `content`, `styles`, optional `images`,
+`requiredFonts`, and non-fatal `warnings`. Computed styles are currently
+flattened onto content nodes, so `styles` is reserved and normally empty.
+
+CSS layout features that pdfmake cannot represent (for example full flex/grid
+layout, sticky positioning, or overflow clipping) remain constrained by
+pdfmake's document-definition model.
+
 ## pdfmake 0.2 compatibility
 
 This library emits a plain pdfmake document definition and never imports pdfmake itself, so it works with **both pdfmake 0.2 and 0.3**. The peer dependency is `^0.2.20 || ^0.3.0` and it is optional.

@@ -50,4 +50,66 @@ export interface ImagesByReferenceResult {
   images: Record<string, string>;
 }
 
+/** Media context used while resolving the author stylesheet cascade. */
+export type CssMedia = "screen" | "print";
+
+/** Details supplied to an injected linked-stylesheet resolver. */
+export interface StylesheetResolverContext {
+  /** The href exactly as it appeared in the HTML. */
+  href: string;
+  /** The href resolved against `baseUrl`, when one was supplied. */
+  resolvedHref: string;
+  /** The media attribute from the link element, if present. */
+  media?: string;
+}
+
+/**
+ * Resolve a linked stylesheet to CSS text. Returning `undefined` leaves the
+ * stylesheet unresolved and records a warning. The converter never fetches
+ * stylesheet URLs itself.
+ */
+export type StylesheetResolver = (
+  href: string,
+  context: StylesheetResolverContext,
+) => string | undefined | Promise<string | undefined>;
+
+/** Options for the asynchronous, stylesheet-aware document conversion API. */
+export interface HtmlToPdfmakeDocumentOptions extends HtmlToPdfmakeOptions {
+  /** Additional author CSS applied after stylesheets found in the HTML. */
+  cssText?: string | string[];
+  /** Explicit resolver for `<link rel="stylesheet">` resources. */
+  resolveStylesheet?: StylesheetResolver;
+  /** Base URL used to resolve relative linked-stylesheet hrefs. */
+  baseUrl?: string;
+  /** CSS media context. `screen` is the default. */
+  media?: CssMedia;
+  /** Width of the isolated CSS viewport. Numeric values are CSS pixels. */
+  contentWidth?: number | string;
+}
+
+/** A non-fatal issue encountered while preparing or applying stylesheets. */
+export interface ConversionWarning {
+  code:
+    | "cssom-unavailable"
+    | "invalid-stylesheet"
+    | "stylesheet-load-failed"
+    | "stylesheet-resolver-missing"
+    | "stylesheet-unresolved"
+    | "unsupported-css-import";
+  message: string;
+  href?: string;
+}
+
+/** Result of converting a complete styled HTML document. */
+export interface HtmlToPdfmakeDocumentResult {
+  content: Content;
+  /** Reserved for reusable pdfmake styles; computed CSS is currently flattened. */
+  styles: Record<string, Record<string, unknown>>;
+  /** Image references when `imagesByReference` is enabled. */
+  images?: Record<string, string>;
+  /** Font-family names used by the converted content. */
+  requiredFonts: string[];
+  warnings: ConversionWarning[];
+}
+
 export type { PdfNode } from "./internal";
