@@ -4,6 +4,7 @@
   htmlToPdfmake('<b>my bold text</b>');
 */
 import { HtmlToPdfMake } from "./converter";
+import { convertDocument } from "./document";
 import type { Content, HtmlToPdfmakeOptions, ImagesByReferenceResult } from "./types/public";
 
 /**
@@ -20,11 +21,17 @@ function htmlToPdfmake(
 }
 
 export default htmlToPdfmake;
-export { htmlToPdfmake, HtmlToPdfMake };
+export { convertDocument, htmlToPdfmake, HtmlToPdfMake };
 export type {
   Content,
+  ConversionWarning,
+  CssMedia,
   CustomTagParams,
+  HtmlToPdfmakeDocumentOptions,
+  HtmlToPdfmakeDocumentResult,
   HtmlToPdfmakeOptions,
   ImagesByReferenceResult,
   PdfNode,
+  StylesheetResolver,
+  StylesheetResolverContext,
 } from "./types/public";
