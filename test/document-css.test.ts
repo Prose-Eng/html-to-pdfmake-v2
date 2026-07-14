@@ -91,6 +91,25 @@ describe("convertDocument CSS cascade", () => {
     expect(result.requiredFonts).toContain("Open Sans");
   });
 
+  test("preserves converter-supported computed properties", async () => {
+    const result = await convertDocument(
+      `<style>
+        td { padding: 2px 4px; }
+        .copy { letter-spacing: 2px; overflow-wrap: anywhere; text-decoration-line: underline; }
+      </style>
+      <table><tr><td>cell</td></tr></table><span class="copy">copy</span>`,
+      { window: createWindow() },
+    );
+
+    const table = (result.content as PdfNode[]).find((node) => node.table);
+    expect(table?.table?.body[0][0].margin).toEqual([3, 2, 3, 2]);
+    expect(findText(result.content, "copy")).toMatchObject({
+      characterSpacing: 2,
+      decoration: ["underline"],
+      wordBreak: "break-all",
+    });
+  });
+
   test("resolves inherited variables and calc against the configured content width", async () => {
     const result = await convertDocument(
       `<style>
