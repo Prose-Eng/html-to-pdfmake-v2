@@ -23,12 +23,6 @@ export interface PdfCanvasElement {
   lineColor: string;
 }
 
-/** Offset/size wrapper used for `<sub>` and `<sup>`. */
-export interface PdfScript {
-  offset: string;
-  fontSize: number;
-}
-
 /** The `table` object of a pdfmake table node. */
 export interface PdfTable {
   body: PdfNode[][];
@@ -69,7 +63,7 @@ export interface PdfNode {
   listStyle?: string;
   listStyleType?: string;
   preserveLeadingSpaces?: boolean;
-  sub?: PdfScript;
-  sup?: PdfScript;
+  sub?: boolean;
+  sup?: boolean;
   [key: string]: unknown;
 }

@@ -741,17 +741,13 @@ describe("unit tests", () => {
   test("sup", () => {
     const [node] = convert("<sup>sup</sup>");
     expect(node.text).toBe("sup");
-    expect(node.sup).toBeTruthy();
-    expect(node.sup?.offset).toBeTruthy();
-    expect(node.sup?.fontSize).toBeTruthy();
+    expect(node.sup).toBe(true);
   });
 
   test("sub", () => {
     const [node] = convert("<sub>sub</sub>");
     expect(node.text).toBe("sub");
-    expect(node.sub).toBeTruthy();
-    expect(node.sub?.offset).toBeTruthy();
-    expect(node.sub?.fontSize).toBeTruthy();
+    expect(node.sub).toBe(true);
   });
 
   test("parse NAME color", () => {
@@ -827,8 +823,8 @@ describe("unit tests", () => {
     const html = `<img src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEBLAEsAAD/7QPQUGhvdG9zaG9wIDMuMAA4QklNA+kKUHJpbnQgSW5mbwAAAAB4AAMAAABIAEgAAAAAAtgCKP/h/+IC+QJGA0cFKAP8AAIAAABIAEgAAAAAAtgCKAABAAAAZAAAAAEAAwMDAAAAAScPAAEAAQA" style="width:100%;height:auto" />`;
     const [node] = convert(html);
     expect(String(node.image).startsWith("data:image")).toBe(true);
-    expect(node.width as unknown).toBe(false);
-    expect(node.height as unknown).toBe(false);
+    expect(node.width).toBeUndefined();
+    expect(node.height).toBeUndefined();
   });
 
   test("complex table with rowspan and colspan", () => {

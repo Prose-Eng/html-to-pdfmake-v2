@@ -59,6 +59,8 @@
     "@types/jsdom": "^21.1.7",
     "jsdom": "^25.0.1",
     "pdfmake": "^0.3.11",
+    "pdfmake-0-2": "npm:pdfmake@0.2.23",
+    "pdfmake-0-3": "npm:pdfmake@0.3.11",
     "typescript": "^5.7.2"
   },
   "engines": {
