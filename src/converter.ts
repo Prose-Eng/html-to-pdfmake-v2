@@ -238,7 +238,7 @@ export class HtmlToPdfMake {
         break;
       case "SUB":
       case "SUP":
-        ret[nodeNameLowerCase] = { offset: "30%", fontSize: 8 };
+        ret[nodeNameLowerCase] = true;
         break;
       case "HR":
         this.buildHr(ret, el);
@@ -958,7 +958,8 @@ export class HtmlToPdfMake {
             }
             // for IMG only
             if (nodeName === "IMG" && (key === "width" || key === "height")) {
-              ret.push({ key, value: convertToUnit(value) });
+              const dimension = convertToUnit(value);
+              if (dimension !== false) ret.push({ key, value: dimension });
               break;
             }
             // padding is not supported by PDFMake
