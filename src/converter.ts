@@ -1,5 +1,10 @@
 import { parseColor } from "./helpers/color";
-import { borderValueRearrange, topRightBottomLeftToObject } from "./helpers/css";
+import {
+  borderValueRearrange,
+  parseCssDeclarations,
+  splitCssValues,
+  topRightBottomLeftToObject,
+} from "./helpers/css";
 import { type DefaultStyle, type DefaultStyles, createDefaultStyles } from "./helpers/defaults";
 import { convertToUnit, toCamelCase } from "./helpers/units";
 import type { PdfNode, PdfTable, StyleProperty, StyleValue } from "./types/internal";
@@ -9,6 +14,71 @@ import type { Content, HtmlToPdfmakeOptions, ImagesByReferenceResult } from "./t
 interface ApplyStyleParams {
   ret: PdfNode;
   parents: HTMLElement[];
+}
+const DECORATION_LINES: Record<string, string> = {
+  underline: "underline",
+  overline: "overline",
+  "line-through": "lineThrough",
+};
+const DECORATION_STYLES = new Set(["solid", "double", "dotted", "dashed", "wavy"]);
+const TABLE_CELL_NODES = new Set(["TD", "TH"]);
+const SUPPORTED_BORDER_PROPERTY =
+  /^border(?:-(?:top|right|bottom|left))?(?:-(?:width|color|style))?$/;
+const FONT_SIZE_KEYWORDS: Record<string, number> = {
+  "xx-small": 7.2,
+  "x-small": 9,
+  small: 10.7,
+  medium: 12,
+  large: 14.4,
+  "x-large": 18,
+  "xx-large": 24,
+  "xxx-large": 36,
+};
+
+function convertDimension(
+  value: string,
+  property: "width" | "height",
+  nodeName: string,
+): string | number | undefined {
+  const normalized = value.trim().toLowerCase();
+  const unitValue = convertToUnit(normalized);
+  if (unitValue !== false) return unitValue;
+  if (nodeName === "IMG") return undefined;
+  if (
+    property === "width" &&
+    (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)%$/.test(normalized) ||
+      normalized === "auto" ||
+      normalized === "*")
+  ) {
+    return normalized;
+  }
+  return undefined;
+}
+
+function convertBoxShorthand(value: string): Array<string | number> | undefined {
+  const values = splitCssValues(value);
+  if (
+    values.length < 1 ||
+    values.length > 4 ||
+    values.some((part) => part.toLowerCase() === "auto")
+  ) {
+    return undefined;
+  }
+  const sides = topRightBottomLeftToObject(value);
+  const converted = [sides.left, sides.top, sides.right, sides.bottom].map((part) =>
+    convertToUnit(part),
+  );
+  if (converted.some((part) => part === false)) return undefined;
+  return converted as number[];
+}
+
+function convertOpacity(value: string): number | undefined {
+  const normalized = value.trim();
+  const parsed = normalized.endsWith("%")
+    ? Number(normalized.slice(0, -1)) / 100
+    : Number(normalized);
+  if (!Number.isFinite(parsed)) return undefined;
+  return Math.min(1, Math.max(0, parsed));
 }
 
 /**
@@ -186,8 +256,14 @@ export class HtmlToPdfMake {
     nodeName: string,
     nodeNameLowerCase: string,
     parents: HTMLElement[],
-  ): PdfNode | undefined {
-    if ((!this.showHidden && el.style.display === "none") || el.style.visibility === "hidden") {
+  ): PdfNode | string | undefined {
+    const visibility = el.style.visibility.toLowerCase();
+    const isHidden =
+      el.hidden ||
+      el.style.display.toLowerCase() === "none" ||
+      visibility === "hidden" ||
+      visibility === "collapse";
+    if (!this.showHidden && isHidden) {
       return undefined;
     }
 
@@ -211,6 +287,9 @@ export class HtmlToPdfMake {
       if (this.searchForStack(ret)) {
         ret.stack = collected.slice(0);
         delete ret.text;
+        if (!["TABLE", "TH", "TD", "OL", "UL", "IMG"].includes(nodeName)) {
+          ret = this.applyStyle({ ret, parents });
+        }
       } else {
         // apply all the inherited classes and styles from the parents
         ret = this.applyStyle({ ret, parents });
@@ -658,11 +737,14 @@ export class HtmlToPdfMake {
     el: HTMLElement,
     nodeName: string,
     parents: HTMLElement[],
-  ): PdfNode {
+  ): PdfNode | string | undefined {
     let ret = input;
     if (this.customTag) {
       // handle custom tags
-      ret = this.customTag.call(this, { element: el, parents, ret }) as PdfNode;
+      const custom = this.customTag.call(this, { element: el, parents, ret });
+      if (!custom) return undefined;
+      if (typeof custom === "string") return custom;
+      ret = Array.isArray(custom) ? { stack: custom as PdfNode[] } : (custom as PdfNode);
     }
 
     // reduce the number of JSON properties
@@ -778,10 +860,18 @@ export class HtmlToPdfMake {
       if (parentNodeName === "tr") ignoreNonDescendentProperties = false;
       const styles = this.parseStyle(parent, ignoreNonDescendentProperties);
       styles.forEach((stl) => {
-        // 'decoration' can be an array
+        // Decorations accumulate through nested inline content in pdfmake.
         if (stl.key === "decoration") {
-          if (!Array.isArray(params.ret[stl.key])) params.ret[stl.key] = [];
-          (params.ret[stl.key] as StyleValue[]).push(stl.value);
+          const values = Array.isArray(stl.value) ? stl.value : [stl.value];
+          if (values.length === 0) {
+            params.ret[stl.key] = [];
+          } else {
+            if (!Array.isArray(params.ret[stl.key])) params.ret[stl.key] = [];
+            const decorations = params.ret[stl.key] as StyleValue[];
+            for (const value of values) {
+              if (!decorations.includes(value)) decorations.push(value);
+            }
+          }
         } else if (["UL", "OL"].includes(params.ret.nodeName ?? "") && stl.key === "alignment") {
           // ignore the "alignment" for the <ol> and <ul> elements
         } else if (params.ret.margin && stl.key.indexOf("margin") === 0) {
@@ -812,21 +902,25 @@ export class HtmlToPdfMake {
 
   /** Transform a CSS style string into an array of pdfmake `{key, value}` pairs. */
   private parseStyle(element: HTMLElement, ignoreProperties: boolean): StyleProperty[] {
-    const styleAttr = (element.getAttribute("style") || "").replace(/!important/g, "");
     const ret: StyleProperty[] = [];
-    const declarations = styleAttr.split(";");
-    // check if we have "width" or "height"
+    const declarations = parseCssDeclarations(element.getAttribute("style") || "");
+    const attributeDimension = (value: string): string =>
+      Number.isFinite(Number(value)) ? `${value}px` : value;
     const width = element.getAttribute("width");
     const height = element.getAttribute("height");
-    if (width) {
-      declarations.unshift(
-        `width:${convertToUnit(width + (Number.isNaN(Number(width)) ? "" : "px"))}`,
-      );
-    }
     if (height) {
-      declarations.unshift(
-        `height:${convertToUnit(height + (Number.isNaN(Number(height)) ? "" : "px"))}`,
-      );
+      declarations.unshift({
+        property: "height",
+        value: attributeDimension(height),
+        important: false,
+      });
+    }
+    if (width) {
+      declarations.unshift({
+        property: "width",
+        value: attributeDimension(width),
+        important: false,
+      });
     }
     // check if we have 'color' or 'size' -- mainly for '<font>'
     const color = element.getAttribute("color");
@@ -840,63 +934,105 @@ export class HtmlToPdfMake {
       ret.push({ key: "fontSize", value: Math.max(this.fontSizes[0], this.fontSizes[size - 1]) });
     }
 
-    const styleDefs = declarations.map((s) => s.toLowerCase().split(":"));
+    const winners = new Map<string, { index: number; important: boolean }>();
+    declarations.forEach((declaration, index) => {
+      const previous = winners.get(declaration.property);
+      if (!previous || declaration.important || !previous.important) {
+        winners.set(declaration.property, { index, important: declaration.important });
+      }
+    });
+    const styleDefs = declarations.filter(
+      (declaration, index) => winners.get(declaration.property)?.index === index,
+    );
     const borders: Array<{ key: string; value: string }> = []; // special treatment for borders
     const nodeName = element.nodeName.toUpperCase();
     styleDefs.forEach((styleDef) => {
-      if (styleDef.length !== 2) return;
-      const key = styleDef[0].trim().toLowerCase();
-      const value = styleDef[1].trim();
+      const key = styleDef.property;
+      const value = styleDef.value.trim();
+      const lowerValue = value.toLowerCase();
       if (this.ignoreStyles.indexOf(key) !== -1) return;
       switch (key) {
         case "margin": {
           if (ignoreProperties) break;
-          // pdfMake uses a different order than CSS
-          let parts = value.split(" ");
-          if (parts.length === 1) parts = [parts[0], parts[0], parts[0], parts[0]];
-          else if (parts.length === 2)
-            parts = [parts[1], parts[0]]; // vertical | horizontal ==> horizontal | vertical
-          else if (parts.length === 3)
-            parts = [parts[1], parts[0], parts[1], parts[2]]; // top | horizontal | bottom
-          else if (parts.length === 4) parts = [parts[3], parts[0], parts[1], parts[2]]; // t r b l ==> l t r b
-          // we now need to convert to PT (PDFMake doesn't support "auto")
-          const margin: Array<string | number | false> = parts.map((val) =>
-            val === "auto" ? "" : convertToUnit(val),
-          );
-          // ignore if we have a FALSE in the table
-          if (margin.indexOf(false) === -1) {
-            ret.push({ key, value: margin as Array<string | number> });
-          }
+          const margin = convertBoxShorthand(value);
+          if (margin) ret.push({ key: "margin", value: margin });
           break;
         }
         case "line-height": {
-          // change % unit
-          if (value.slice(-1) === "%") {
-            ret.push({ key: "lineHeight", value: Number(value.slice(0, -1)) / 100 });
+          let lineHeight: number | undefined;
+          if (lowerValue.endsWith("%")) {
+            lineHeight = Number(lowerValue.slice(0, -1)) / 100;
+          } else if (Number.isFinite(Number(lowerValue))) {
+            lineHeight = Number(lowerValue);
           } else {
-            ret.push({ key: "lineHeight", value: convertToUnit(value) });
+            const absoluteLineHeight = convertToUnit(lowerValue);
+            if (absoluteLineHeight !== false) lineHeight = absoluteLineHeight / 12;
+          }
+          if (lineHeight && lineHeight > 0 && Number.isFinite(lineHeight)) {
+            ret.push({ key: "lineHeight", value: lineHeight });
           }
           break;
         }
         case "text-align": {
-          ret.push({ key: "alignment", value });
-          break;
-        }
-        case "font-weight": {
-          if (value === "bold" || Number(value) >= 700) ret.push({ key: "bold", value: true });
-          else ret.push({ key: "bold", value: false });
-          break;
-        }
-        case "text-decoration": {
-          // verify the value is valid
-          const deco = toCamelCase(value);
-          if (["underline", "lineThrough", "overline"].includes(deco)) {
-            ret.push({ key: "decoration", value: deco });
+          if (["left", "right", "center", "justify"].includes(lowerValue)) {
+            ret.push({ key: "alignment", value: lowerValue });
           }
           break;
         }
+        case "font-weight": {
+          const isBold = lowerValue === "bold" || lowerValue === "bolder" || Number(value) >= 700;
+          ret.push({ key: "bold", value: isBold });
+          break;
+        }
+        case "text-decoration":
+        case "text-decoration-line": {
+          const tokens = splitCssValues(lowerValue);
+          if (tokens.includes("none")) {
+            ret.push({ key: "decoration", value: [] });
+            break;
+          }
+          const lines = tokens
+            .filter((token) => token in DECORATION_LINES)
+            .map((token) => DECORATION_LINES[token]);
+          if (lines.length > 0) ret.push({ key: "decoration", value: lines });
+          if (key === "text-decoration-line") break;
+          const style = tokens.find((token) => DECORATION_STYLES.has(token));
+          if (style) ret.push({ key: "decorationStyle", value: style });
+          const thicknessToken = tokens.find((token) => convertToUnit(token) !== false);
+          if (thicknessToken) {
+            ret.push({
+              key: "decorationThickness",
+              value: convertToUnit(thicknessToken) as number,
+            });
+          }
+          const colorToken = tokens.find(
+            (token) =>
+              !(token in DECORATION_LINES) &&
+              !DECORATION_STYLES.has(token) &&
+              token !== thicknessToken,
+          );
+          if (colorToken) {
+            ret.push({ key: "decorationColor", value: parseColor(colorToken).color });
+          }
+          break;
+        }
+        case "text-decoration-style": {
+          if (DECORATION_STYLES.has(lowerValue)) {
+            ret.push({ key: "decorationStyle", value: lowerValue });
+          }
+          break;
+        }
+        case "text-decoration-color": {
+          ret.push({ key: "decorationColor", value: parseColor(value).color });
+          break;
+        }
+        case "text-decoration-thickness": {
+          const thickness = convertToUnit(lowerValue);
+          if (thickness !== false) ret.push({ key: "decorationThickness", value: thickness });
+          break;
+        }
         case "font-style": {
-          if (value === "italic") ret.push({ key: "italics", value: true });
+          ret.push({ key: "italics", value: lowerValue === "italic" || lowerValue === "oblique" });
           break;
         }
         case "font-family": {
@@ -920,7 +1056,7 @@ export class HtmlToPdfMake {
           // if TH/TD then use 'fillColor' instead of 'background'
           const res = parseColor(value);
           // if the color is "transparent", we ignore it
-          if (res.color !== "transparent") {
+          if (res.color.toLowerCase() !== "transparent") {
             const isCell = nodeName === "TD" || nodeName === "TH";
             ret.push({ key: isCell ? "fillColor" : "background", value: res.color });
             if (res.opacity < 1) {
@@ -930,94 +1066,120 @@ export class HtmlToPdfMake {
           break;
         }
         case "text-indent": {
-          ret.push({ key: "leadingIndent", value: convertToUnit(value) });
+          const indent = convertToUnit(lowerValue);
+          if (indent !== false) ret.push({ key: "leadingIndent", value: indent });
           break;
         }
         case "white-space": {
-          if (value === "nowrap") {
-            ret.push({ key: "noWrap", value: true });
+          const preserve = ["pre", "pre-wrap", "break-spaces"].includes(lowerValue);
+          ret.push({ key: "noWrap", value: lowerValue === "nowrap" || lowerValue === "pre" });
+          ret.push({ key: "preserveLeadingSpaces", value: preserve });
+          ret.push({ key: "preserveTrailingSpaces", value: preserve });
+          break;
+        }
+        case "opacity": {
+          const opacity = convertOpacity(lowerValue);
+          if (opacity !== undefined) ret.push({ key: "opacity", value: opacity });
+          break;
+        }
+        case "letter-spacing": {
+          if (lowerValue === "normal") {
+            ret.push({ key: "characterSpacing", value: 0 });
           } else {
-            ret.push({
-              key: "preserveLeadingSpaces",
-              value: value === "break-spaces" || value.slice(0, 3) === "pre",
-            });
+            const spacing = convertToUnit(lowerValue);
+            if (spacing !== false) ret.push({ key: "characterSpacing", value: spacing });
           }
           break;
         }
+        case "word-break":
+        case "overflow-wrap":
+        case "word-wrap": {
+          const breakAll = ["break-all", "break-word", "anywhere"].includes(lowerValue);
+          ret.push({ key: "wordBreak", value: breakAll ? "break-all" : "normal" });
+          break;
+        }
+        case "vertical-align": {
+          if (ignoreProperties) break;
+          if (TABLE_CELL_NODES.has(nodeName)) {
+            if (["top", "middle", "bottom"].includes(lowerValue)) {
+              ret.push({ key: "verticalAlignment", value: lowerValue });
+            }
+          } else if (lowerValue === "sub") {
+            ret.push({ key: "sub", value: true });
+            ret.push({ key: "sup", value: false });
+          } else if (lowerValue === "super") {
+            ret.push({ key: "sup", value: true });
+            ret.push({ key: "sub", value: false });
+          } else if (lowerValue === "baseline") {
+            ret.push({ key: "sup", value: false });
+            ret.push({ key: "sub", value: false });
+          }
+          break;
+        }
+        case "margin-top":
+        case "margin-right":
+        case "margin-bottom":
+        case "margin-left": {
+          if (ignoreProperties) break;
+          const margin = convertToUnit(lowerValue);
+          if (margin !== false) {
+            ret.push({ key: toCamelCase(key), value: margin });
+          }
+          break;
+        }
+        case "padding": {
+          if (ignoreProperties || !TABLE_CELL_NODES.has(nodeName)) break;
+          const padding = convertBoxShorthand(value);
+          if (padding) ret.push({ key: "margin", value: padding });
+          break;
+        }
+        case "padding-top":
+        case "padding-right":
+        case "padding-bottom":
+        case "padding-left": {
+          if (ignoreProperties || !TABLE_CELL_NODES.has(nodeName)) break;
+          const padding = convertToUnit(lowerValue);
+          if (padding !== false) {
+            ret.push({ key: toCamelCase(key.replace("padding", "margin")), value: padding });
+          }
+          break;
+        }
+        case "width":
+        case "height": {
+          if (ignoreProperties) break;
+          const dimension = convertDimension(value, key, nodeName);
+          if (dimension !== undefined) ret.push({ key, value: dimension });
+          break;
+        }
+        case "font-size": {
+          const fontSize = convertToUnit(lowerValue);
+          const keywordSize = FONT_SIZE_KEYWORDS[lowerValue];
+          if (fontSize !== false) {
+            ret.push({ key: "fontSize", value: fontSize });
+          } else if (keywordSize !== undefined) {
+            ret.push({ key: "fontSize", value: keywordSize });
+          }
+          break;
+        }
+        case "list-style":
+        case "list-style-type": {
+          const listType = splitCssValues(lowerValue).find(
+            (token) => token !== "inside" && token !== "outside",
+          );
+          if (listType && !listType.startsWith("url(")) {
+            ret.push({ key: "listStyleType", value: listType });
+          }
+          break;
+        }
+        case "display":
+        case "visibility": {
+          // Visibility affects tree construction and is never a pdfmake style.
+          break;
+        }
         default: {
-          // do we have borders properties?
-          if (key.indexOf("border") === 0) {
-            if (!ignoreProperties) borders.push({ key, value });
-          } else {
-            // ignore some properties
-            if (
-              ignoreProperties &&
-              (key.indexOf("margin-") === 0 || key === "width" || key === "height")
-            ) {
-              break;
-            }
-            // for IMG only
-            if (nodeName === "IMG" && (key === "width" || key === "height")) {
-              const dimension = convertToUnit(value);
-              if (dimension !== false) ret.push({ key, value: dimension });
-              break;
-            }
-            // padding is not supported by PDFMake
-            if (key.indexOf("padding") === 0) break;
-            const finalKey = key.indexOf("-") > -1 ? toCamelCase(key) : key;
-            if (value) {
-              // convert value to a 'pt' when possible
-              const parsedValue = convertToUnit(value);
-              let finalValue: StyleValue = parsedValue === false ? value : parsedValue;
-              // if we have 'font-size' with a parsedValue at false, check for keywords
-              if (finalKey === "fontSize" && parsedValue === false) {
-                if (
-                  [
-                    "xx-small",
-                    "x-small",
-                    "small",
-                    "medium",
-                    "large",
-                    "x-large",
-                    "xx-large",
-                    "xxx-large",
-                  ].includes(value)
-                ) {
-                  // we use 12pt as the medium value
-                  switch (value) {
-                    case "xx-small":
-                      finalValue = 7.2;
-                      break; // 60%
-                    case "x-small":
-                      finalValue = 9;
-                      break; // 75%
-                    case "small":
-                      finalValue = 10.7;
-                      break; // 89%
-                    case "medium":
-                      finalValue = 12;
-                      break;
-                    case "large":
-                      finalValue = 14.4;
-                      break; // 120%
-                    case "x-large":
-                      finalValue = 18;
-                      break; // 150%
-                    case "xx-large":
-                      finalValue = 24;
-                      break; // 200%
-                    case "xxx-large":
-                      finalValue = 36;
-                      break; // 300%
-                  }
-                } else {
-                  break;
-                }
-              }
-              // PDFMake doesn't support "auto" as a value for "margin"
-              if (finalKey.indexOf("margin") === 0 && value === "auto") break;
-              ret.push({ key: finalKey, value: finalValue });
-            }
+          // Browser-only and unknown properties are ignored instead of leaking into the DDO.
+          if (SUPPORTED_BORDER_PROPERTY.test(key) && !ignoreProperties) {
+            borders.push({ key, value });
           }
         }
       }

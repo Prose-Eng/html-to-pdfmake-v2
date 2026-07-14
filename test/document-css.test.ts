@@ -87,7 +87,7 @@ describe("convertDocument CSS cascade", () => {
 
     const child = findText(result.content, "child");
     expect(child.color).toBe("#008000");
-    expect(child.font).toBe("OpenSans");
+    expect(child.font).toBe("Open Sans");
     expect(result.requiredFonts).toContain("Open Sans");
   });
 

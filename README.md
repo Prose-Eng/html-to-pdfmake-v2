@@ -196,21 +196,36 @@ The library handles these CSS properties:
 
 | Property | Support Details |
 |----------|----------------|
-| `background-color` | Good support |
-| `border` | Including individual borders |
-| `color` | Good support, including opacity |
-| `font-family` | Basic support |
-| `font-style` | Support for `italic` |
-| `font-weight` | Support for `bold` |
-| `height` | For tables and images |
-| `width` | For tables and images |
-| `margin` | Including individual margins |
-| `text-align` | Good support |
-| `text-decoration` | Support for `underline`, `line-through` |
-| `text-indent` | Basic support |
-| `white-space` | Support for `nowrap`, `pre`, `break-spaces` |
-| `line-height` | Basic support |
+| `background-color` | Text background or table-cell fill, including alpha |
+| `border` | Table-cell borders, including individual sides and colors |
+| `color` | Named, hex, RGB(A), and HSL colors |
+| `font-family` | First family in the fallback list |
+| `font-size` | Absolute units and CSS size keywords |
+| `font-style` | `italic` and `oblique` |
+| `font-weight` | Named and numeric bold weights |
+| `height` | Absolute lengths; unsupported/automatic values are omitted |
+| `width` | Absolute lengths plus safe percentage/column widths |
+| `margin` | Robust one-to-four-value shorthand and individual sides |
+| `padding` | Table cells only; represented as the cell content margin |
+| `text-align` | `left`, `right`, `center`, and `justify` |
+| `text-decoration` | Multiple lines plus style, color, and thickness |
+| `text-indent` | Absolute lengths |
+| `vertical-align` | Table-cell top/middle/bottom and text sub/super |
+| `white-space` | `nowrap`, `pre`, `pre-wrap`, and `break-spaces` |
+| `line-height` | Unitless, percentage, and absolute values |
+| `letter-spacing` | Maps to pdfmake `characterSpacing` |
+| `word-break`, `overflow-wrap` | Maps break-all/anywhere behavior |
+| `opacity` | Number or percentage, clamped to the PDF range |
 | `list-style-type` | Good support |
+
+Inline declarations are tokenized without splitting quoted strings, functions, or data URLs,
+and normal CSS `!important` precedence is retained for duplicate properties. Styles remain on
+wrapper elements when their content becomes a pdfmake stack.
+
+pdfmake is not a browser layout engine. Browser-only properties such as `position`, `overflow`,
+`text-overflow`, flex/grid layout, and general element padding are intentionally ignored instead
+of being copied as invalid document-definition keys. Table-cell padding is the supported
+exception; it is represented by a margin on the cell content node.
 
 ## Configuration Options
 
@@ -320,6 +335,8 @@ pdfMake.createPdf(result).download();
 #### customTag
 
 Function to handle custom HTML tags or modify existing tag behavior:
+
+Return `null`, `undefined`, or `false` to omit an element and its converted children.
 
 ```javascript
 const options = {
