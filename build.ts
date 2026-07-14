@@ -2,6 +2,7 @@
  * Build script. Emits, into ./dist:
  *   - index.mjs   ESM bundle
  *   - index.cjs   CommonJS bundle (require() returns the function directly)
+ *   - browser.mjs browser-targeted ESM bundle with the public named exports
  *   - browser.js  minified IIFE that sets the global `htmlToPdfmake`
  *   - index.d.ts  TypeScript declarations (via tsc)
  *
@@ -30,6 +31,15 @@ await build({
   target: "node",
   format: "esm",
   naming: "index.mjs",
+});
+// Browser ESM. Bundlers select this through the package's `browser` export
+// condition, so it must expose the same public API as the Node ESM bundle.
+await build({
+  entrypoints: ["src/index.ts"],
+  outdir,
+  target: "browser",
+  format: "esm",
+  naming: "browser.mjs",
 });
 
 // CommonJS. Bun emits `module.exports = { default, htmlToPdfmake }`; flatten it so
@@ -65,4 +75,14 @@ await build({
 // Type declarations
 await $`tsc -p tsconfig.build.json`;
 
-console.log("Build complete -> dist/{index.mjs,index.cjs,browser.js,index.d.ts}");
+const browserModule = (await import(`./${outdir}/browser.mjs?build=${Date.now()}`)) as Record<
+  string,
+  unknown
+>;
+for (const exportName of ["default", "htmlToPdfmake", "convertDocument"]) {
+  if (typeof browserModule[exportName] !== "function") {
+    throw new Error(`Browser ESM bundle is missing the ${exportName} function export`);
+  }
+}
+
+console.log("Build complete -> dist/{index.mjs,index.cjs,browser.mjs,browser.js,index.d.ts}");
