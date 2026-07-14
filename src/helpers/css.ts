@@ -7,22 +7,130 @@ export interface BoxSides {
   bottom: string;
   left: string;
 }
+/** A declaration parsed from an inline style attribute. */
+export interface CssDeclaration {
+  property: string;
+  value: string;
+  important: boolean;
+}
+
+/**
+ * Split CSS text on a delimiter, while preserving delimiters inside strings,
+ * comments, parentheses and brackets. This is deliberately small, but unlike
+ * String.split it is safe for data URLs, rgb()/calc(), and quoted font names.
+ */
+function splitCss(text: string, delimiter: ";" | ":" | "whitespace"): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+  let comment = false;
+  let depth = 0;
+
+  const flush = (): void => {
+    const value = current.trim();
+    if (value) parts.push(value);
+    current = "";
+  };
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (comment) {
+      if (char === "*" && next === "/") {
+        comment = false;
+        index++;
+      }
+      continue;
+    }
+    if (!quote && char === "/" && next === "*") {
+      comment = true;
+      index++;
+      continue;
+    }
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      current += char;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += char;
+      if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+      continue;
+    }
+    if (char === "(" || char === "[") {
+      depth++;
+      current += char;
+      continue;
+    }
+    if (char === ")" || char === "]") {
+      depth = Math.max(0, depth - 1);
+      current += char;
+      continue;
+    }
+
+    const isDelimiter =
+      depth === 0 &&
+      ((delimiter === "whitespace" && /\s/.test(char)) ||
+        (delimiter !== "whitespace" && char === delimiter));
+    if (isDelimiter) {
+      flush();
+      if (delimiter === ":") {
+        const remainder = text.slice(index + 1).trim();
+        if (remainder) parts.push(remainder);
+        return parts;
+      }
+      continue;
+    }
+    current += char;
+  }
+  flush();
+  return parts;
+}
+
+/** Parse inline CSS without corrupting colon/semicolon-bearing values. */
+export function parseCssDeclarations(style: string): CssDeclaration[] {
+  const declarations: CssDeclaration[] = [];
+  for (const rawDeclaration of splitCss(style, ";")) {
+    const parts = splitCss(rawDeclaration, ":");
+    if (parts.length !== 2) continue;
+    const property = parts[0].trim().toLowerCase();
+    if (!property) continue;
+    const important = /\s*!important\s*$/i.test(parts[1]);
+    const value = parts[1].replace(/\s*!important\s*$/i, "").trim();
+    if (value) declarations.push({ property, value, important });
+  }
+  return declarations;
+}
+
+/** Split a CSS shorthand without splitting function arguments. */
+export function splitCssValues(value: string): string[] {
+  return splitCss(value, "whitespace");
+}
 
 /**
  * Expand a CSS box shorthand (1-4 values) into explicit `{top,right,bottom,left}`.
- * Values are matched as colors (hex/rgb/hsl/name), matching the border-color use.
+ * Functions and quoted values remain intact while the four sides are expanded.
  */
 export function topRightBottomLeftToObject(props: string): BoxSides {
-  // regexp to capture the colors (hex, rgb, rgba, hsl, hsla, color name)
-  const colorRegex = /#[0-9a-fA-F]{3,6}|\b(?:rgba?|hsla?)\([^)]*\)|\b[a-zA-Z]+\b/g;
-  const colors: string[] = props.match(colorRegex) || [];
+  const values = splitCssValues(props);
+  const top = values[0] ?? "";
+  let right = values[1] ?? "";
+  let bottom = values[2] ?? "";
+  let left = values[3] ?? "";
 
-  const top = colors[0] ?? "";
-  let right = colors[1] ?? "";
-  let bottom = colors[2] ?? "";
-  let left = colors[3] ?? "";
-
-  switch (colors.length) {
+  switch (values.length) {
     case 1:
       right = bottom = left = top;
       break;

@@ -28,7 +28,7 @@ export interface HtmlToPdfmakeOptions {
   imagesByReference?: boolean;
   /** Remove extra blank lines that some HTML can introduce. */
   removeExtraBlanks?: boolean;
-  /** Render elements with `display:none` instead of skipping them. */
+  /** Render hidden/display-none/collapsed elements instead of skipping them. */
   showHidden?: boolean;
   /** Do not add the `html-TAG` class to each produced node. */
   removeTagClasses?: boolean;
@@ -39,7 +39,7 @@ export interface HtmlToPdfmakeOptions {
   /** Override the default styles applied per HTML element; `null` disables one. */
   defaultStyles?: Record<string, Record<string, unknown> | null>;
   /** Handle non-regular HTML tags. Return a pdfmake node or a falsy value. */
-  customTag?: (params: CustomTagParams) => Content;
+  customTag?: (params: CustomTagParams) => Content | null | undefined | false;
   /** Transform text nodes before they are added to the document. */
   replaceText?: (text: string, parents: HTMLElement[]) => string;
 }

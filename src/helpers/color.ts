@@ -28,14 +28,14 @@ export function parseColor(color: string): ParsedColor {
   const hexRegex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
   // e.g. rgb(0,255,34) or rgb(100%, 100%, 100%) or rgba(0,125,250,0.8)
   const rgbRegex =
-    /^rgba?\(\s*(\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?)(,\s*\d+(\.\d+)?)?\)$/;
+    /^rgba?\(\s*(\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?)(,\s*\d+(\.\d+)?)?\)$/i;
   // e.g. hsl(300, 10%, 20%)
-  const hslRegex = /^hsl\((\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?)\)$/;
+  const hslRegex = /^hsl\((\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?),\s*(\d+(\.\d+)?%?)\)$/i;
   // e.g. "white" or "red"
   const nameRegex = /^[a-z]+$/i;
 
   if (hexRegex.test(parsed)) {
-    return { color: parsed, opacity };
+    return { color: parsed.toLowerCase(), opacity };
   }
 
   if (hslRegex.test(parsed)) {
@@ -72,7 +72,7 @@ export function parseColor(color: string): ParsedColor {
     return { color: `#${hex.join("")}`, opacity };
   }
 
-  if (nameRegex.test(parsed)) return { color: parsed, opacity };
+  if (nameRegex.test(parsed)) return { color: parsed.toLowerCase(), opacity };
 
   console.error(`Could not parse color "${parsed}"`);
   return { color: parsed, opacity };
