@@ -106,8 +106,28 @@ describe("convertDocument CSS cascade", () => {
     expect(findText(result.content, "copy")).toMatchObject({
       characterSpacing: 2,
       decoration: ["underline"],
-      wordBreak: "break-all",
     });
+    expect(findText(result.content, "copy").wordBreak).toBeUndefined();
+  });
+
+  test("lets a specific word-break rule override inherited emergency wrapping", async () => {
+    const result = await convertDocument(
+      `<style>
+        .report { overflow-wrap: break-word; }
+        .explicit { word-break: break-all; }
+        .normal { word-break: keep-all; }
+      </style>
+      <div class="report">
+        <span class="inherited">inherited</span>
+        <span class="explicit">explicit</span>
+        <span class="normal">normal</span>
+      </div>`,
+      { window: createWindow() },
+    );
+
+    expect(findText(result.content, "inherited").wordBreak).toBeUndefined();
+    expect(findText(result.content, "explicit").wordBreak).toBe("break-all");
+    expect(findText(result.content, "normal").wordBreak).toBe("normal");
   });
 
   test("resolves inherited variables and calc against the configured content width", async () => {

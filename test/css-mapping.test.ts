@@ -80,14 +80,46 @@ describe("CSS to pdfmake mappings", () => {
     expect(text[2].sub).toBe(true);
   });
 
-  test("maps character spacing, word breaking and clamped opacity", () => {
+  test("maps character spacing, explicit word breaking and clamped opacity", () => {
     const [node] = convert(
-      '<span style="letter-spacing:2px;overflow-wrap:anywhere;opacity:150%">text</span>',
+      '<span style="letter-spacing:2px;word-break:break-all;opacity:150%">text</span>',
     );
 
     expect(node.characterSpacing).toBe(2);
     expect(node.wordBreak).toBe("break-all");
     expect(node.opacity).toBe(1);
+  });
+
+  test("does not turn CSS emergency wrapping into pdfmake break-all", () => {
+    const [anywhere] = convert('<span style="overflow-wrap:anywhere">anywhere</span>');
+    const [breakWord] = convert('<span style="overflow-wrap:break-word">break word</span>');
+    const [legacy] = convert('<span style="word-wrap:break-word">legacy</span>');
+
+    expect(anywhere.wordBreak).toBeUndefined();
+    expect(breakWord.wordBreak).toBeUndefined();
+    expect(legacy.wordBreak).toBeUndefined();
+  });
+
+  test("maps word-break normal and keep-all to normal and preserves nowrap", () => {
+    const [normal] = convert('<span style="word-break:normal">normal</span>');
+    const [keepAll] = convert('<span style="word-break:keep-all">keep all</span>');
+    const [nowrap] = convert('<span style="white-space:nowrap">one line</span>');
+
+    expect(normal.wordBreak).toBe("normal");
+    expect(keepAll.wordBreak).toBe("normal");
+    expect(nowrap.noWrap).toBe(true);
+  });
+
+  test("keeps inline subscript and superscript runs from inheriting emergency break-all", () => {
+    const [root] = convert(
+      '<span style="overflow-wrap:break-word">q<sub>z</sub>, psf x<sup>2</sup></span>',
+    );
+    const text = nodes(root.text);
+
+    expect(root.wordBreak).toBeUndefined();
+    for (const run of text) expect(run.wordBreak).toBeUndefined();
+    expect(text.find((run) => run.nodeName === "SUB")?.sub).toBe(true);
+    expect(text.find((run) => run.nodeName === "SUP")?.sup).toBe(true);
   });
 
   test("keeps safe relative widths and omits invalid image dimensions", () => {
