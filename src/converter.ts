@@ -1091,11 +1091,15 @@ export class HtmlToPdfMake {
           }
           break;
         }
-        case "word-break":
+        case "word-break": {
+          ret.push({ key: "wordBreak", value: lowerValue === "break-all" ? "break-all" : "normal" });
+          break;
+        }
         case "overflow-wrap":
         case "word-wrap": {
-          const breakAll = ["break-all", "break-word", "anywhere"].includes(lowerValue);
-          ret.push({ key: "wordBreak", value: breakAll ? "break-all" : "normal" });
+          // pdfmake only supports normal line breaking or breaking between every character.
+          // CSS emergency wrapping (break-word/anywhere) is not equivalent to break-all, so
+          // leave it unmapped rather than splitting words that already fit their container.
           break;
         }
         case "vertical-align": {
