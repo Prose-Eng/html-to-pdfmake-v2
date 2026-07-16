@@ -1092,7 +1092,10 @@ export class HtmlToPdfMake {
           break;
         }
         case "word-break": {
-          ret.push({ key: "wordBreak", value: lowerValue === "break-all" ? "break-all" : "normal" });
+          ret.push({
+            key: "wordBreak",
+            value: lowerValue === "break-all" ? "break-all" : "normal",
+          });
           break;
         }
         case "overflow-wrap":
